@@ -6,3 +6,7 @@ __pycache__/
 *.mp4
 *.png
 .DS_Store
+
+# proof artifacts are evidence -- track them despite the blanket media ignores above
+!docs/proof/*.mp4
+!docs/proof/*.png

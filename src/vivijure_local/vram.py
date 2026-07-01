@@ -15,11 +15,11 @@ from dataclasses import dataclass
 
 from .config import I2VConfig, Offload
 
-# The design floor. PROVISIONAL for CogVideoX: unlike the LTX door (proven at a 12GB budget), the real
-# consumer floor for CogVideoX-5B-I2V is pinned by the card benchmark (Milestone 2). CogVideoX-5B is
-# heavier than LTX (a 5B transformer + a large T5-XXL text encoder), so the honest floor may sit higher,
-# or need sequential offload / quantization to reach a smaller card. 16GB is the working target until
-# real silicon says otherwise; we prove-then-name the tier, exactly like LTX.
+# The design floor. PROVEN for CogVideoX (Milestone 2, docs/proof/RESULTS.md, 2026-07-01): on a real
+# card the 49-frame tiers (standard/final) fit a ~15GB PyTorch budget and OOM at 13GB, so the honest
+# consumer floor is a 16GB card -- heavier than the LTX door's proven 12GB, as expected for a 5B DiT +
+# T5-XXL encoder. Measured peak ~13.6GB allocated / ~15.6GB reserved at model-cpu-offload + VAE
+# tiling/slicing (bf16). 16GB is the proven floor.
 FLOOR_VRAM_GB = 16.0
 
 # A slice of VRAM the driver / CUDA context / cuDNN workspaces / allocator fragmentation always hold.
@@ -33,10 +33,11 @@ RESERVED_GB = 2.0
 # consumer card (that is why offload is not optional here). The offload factor below models paging most
 # of that off the GPU; the live benchmark replaces this with the measured peak.
 _WEIGHTS_GB = {
-    # CogVideoX-5B-I2V: ~5B transformer (bf16) + T5-XXL encoder + 3D VAE. Fully resident is ~22-24GB, so
-    # this NEVER picks NONE-offload on a consumer card. With model-cpu-offload community reports fit a
-    # 16GB card; sequential offload pushes far lower (~5GB) but is very slow. Milestone 2 measures it.
-    "THUDM/CogVideoX-5b-I2V": 24.0,
+    # CogVideoX-5B-I2V: ~5B transformer (bf16) + T5-XXL encoder + 3D VAE. CALIBRATED to Milestone 2
+    # (docs/proof/RESULTS.md): measured ~13.6GB allocated peak at model-cpu-offload + VAE tiling/slicing,
+    # so resident 30 * 0.45 (model factor) ~= 13.5GB matches reality (-> fits a 16GB card, OOMs 12/14GB).
+    # NONE-offload (~30GB) never fits a consumer card; sequential (~5.4GB) is the slow low-VRAM fallback.
+    "THUDM/CogVideoX-5b-I2V": 30.0,
 }
 _DEFAULT_WEIGHTS_GB = 12.0  # an unknown CogVideoX variant: assume large so we err toward more offload
 
