@@ -18,7 +18,7 @@ safetensors>=0.4.5
 sentencepiece>=0.2.0       # CogVideoX T5-XXL text encoder tokenizer
 imageio>=2.37.3
 imageio-ffmpeg>=0.6.0      # export_to_video
-av>=12.0.0                 # frame-accurate clip write
+av>=17.1.0                 # frame-accurate clip write
 
 # --- object storage (shared vivijure R2 bucket) ---
 boto3>=1.34.0
