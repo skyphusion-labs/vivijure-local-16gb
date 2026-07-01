@@ -147,7 +147,11 @@ class I2VConfig:
         width = min(base.width, _coerce_int(cfg.get("width"), base.width) or base.width)
         height = min(base.height, _coerce_int(cfg.get("height"), base.height) or base.height)
         seed = _coerce_int(cfg.get("seed"), -1)
-        fps = min(30, max(8, _coerce_int(cfg.get("fps"), 8)))
+        # CogVideoX-5B-I2V is a FIXED 8 fps model: its frames ARE 8fps frames, so pin the export cadence
+        # to 8 and ignore a higher requested fps. A shared local-gpu module may default fps=24 (the LTX
+        # door cadence); exporting CogVideoX's 49 frames at 24fps would play about 3x too fast. Honest
+        # to the model: the knob cannot change what cadence the frames were generated for.
+        fps = 8
         flow_shift = _coerce_float(cfg.get("flow_shift"), 5.0)
         return cls(
             tier=t, model=base.model, steps=base.steps, guidance_scale=base.guidance_scale,

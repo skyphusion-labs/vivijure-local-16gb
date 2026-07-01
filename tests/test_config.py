@@ -41,9 +41,13 @@ def test_caller_can_narrow_but_never_widen_past_the_honest_ceiling():
     assert smaller.num_frames == 49
 
 
-def test_fps_clamped_to_8_30_and_seed_and_negative_pass_through():
-    assert I2VConfig.from_request({"fps": 999}).fps == 30
+def test_fps_pinned_to_8_and_seed_and_negative_pass_through():
+    # CogVideoX-5B-I2V is fixed 8 fps: the backend pins the export cadence to 8 regardless of the
+    # requested fps (a shared module may send the LTX door's 24). The frames ARE 8fps frames.
+    assert I2VConfig.from_request({"fps": 999}).fps == 8
+    assert I2VConfig.from_request({"fps": 24}).fps == 8
     assert I2VConfig.from_request({"fps": 1}).fps == 8
+    assert I2VConfig.from_request({}).fps == 8
     assert I2VConfig.from_request({"seed": 42}).seed == 42
     assert I2VConfig.from_request({"seed": -1}).seed == -1
     assert I2VConfig.from_request({"negative_prompt": "blurry"}).negative_prompt == "blurry"
