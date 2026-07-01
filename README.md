@@ -221,6 +221,12 @@ One credential: the shared-R2 key (read the keyframe, write the clip). Input is 
 `LOCAL_BACKEND_TOKEN` is REQUIRED on every i2v request (the tunnel is public; an unconfigured token
 makes the i2v endpoint refuse to serve). The backend holds no studio secrets and no submitter identity.
 
+## Support
+
+Questions, bugs, or ideas? Start with this repo's [GitHub Issues](../../issues); see
+[SUPPORT.md](SUPPORT.md) for how to ask and what to include. Found a security problem? Report it
+privately per [SECURITY.md](SECURITY.md), never as a public issue.
+
 ## License
 
 **AGPL-3.0-only.** A labor of love, given freely: use it, learn from it, self-host it, build your own
