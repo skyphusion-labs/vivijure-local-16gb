@@ -10,3 +10,7 @@ __pycache__/
 # proof artifacts are evidence -- track them despite the blanket media ignores above
 !docs/proof/*.mp4
 !docs/proof/*.png
+
+# never commit a real .env (downstream users cp .env.example .env with their creds)
+.env
+.dev.vars

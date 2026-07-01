@@ -70,7 +70,7 @@ now the PROVEN value.
 
 ## Cost + hygiene
 
-One SECURE pod (`93yr5vxe59smfi`, RTX 4090 24GB, $0.69/hr), ~40 min GPU, removed via `runpodctl remove`.
+One SECURE pod (RTX 4090 24GB, $0.69/hr), ~40 min GPU, removed via `runpodctl remove` after.
 Per-identity R2 token (freshly minted least-privilege after an earlier admin-token leak was revoked);
 proof objects deleted; the fresh trio was injected pod-side via env, never to a transcript. Prod
 untouched throughout.
