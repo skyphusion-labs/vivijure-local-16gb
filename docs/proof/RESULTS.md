@@ -6,7 +6,7 @@ counterpart to the LTX door's 12GB proof (`vivijure-local-12gb`) -- CogVideoX-5B
 so the floor is 16GB, not 12GB, and clips are minutes-per-clip, not sub-minute. Prove-then-name: the
 tier NAME derives from the cap-sweep floor below, NOT the 4090's raw 24GB.
 
-**Conditions.** Container `ghcr.io/skyphusion-labs/vivijure-local-cogvideox:proof-ssh` (the real runtime
+**Conditions.** Container `ghcr.io/skyphusion-labs/vivijure-local-16gb:proof-ssh` (the real runtime
 + an sshd overlay; crash-loop-safe idle boot). GPU: **NVIDIA GeForce RTX 4090, 24GB Ada** (the consumer
 analog; 24GB headroom lets us measure the true peak AND cap-sweep to the floor in one pod). Engine:
 `CogVideoXImageToVideoPipeline` + `THUDM/CogVideoX-5b-I2V` (bf16), `enable_model_cpu_offload()` + VAE

@@ -19,23 +19,43 @@ below).
 control plane --> local-gpu module (CF Worker) --/run--> tunnel --> THIS backend (CogVideoX-5B-I2V, 16GB)
 ```
 
-## Run it on your own box (one command)
+## Quickstart (your first run)
+
+You need **one** thing before you start: your Vivijure studio's **Cloudflare R2 credentials**. This
+backend shares that bucket -- it reads the keyframe and writes the finished clip there. Everything else
+(the tunnel, the access token) is automatic.
+
+**1. Put your R2 credentials in `.env`:**
 
 ```sh
-cp .env.example .env        # your R2 creds (+ optional LOCAL_BACKEND_TOKEN)
-docker compose up -d        # first start caches the CogVideoX weights, then serves :8000
-curl localhost:8000/health  # {"ok":true,"engine":"cogvideox",...}
+cp .env.example .env
+# edit .env and set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+# (R2_BUCKET defaults to "vivijure")
 ```
 
-Then expose `:8000` over a Cloudflare tunnel and point your studio's `local-gpu` module at it. The full
-homelabber walkthrough (prereqs, tunnel, honest trade-offs, troubleshooting) is
-**[docs/HOMELABBER.md](docs/HOMELABBER.md)**; the studio-side wiring is
-**[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
+Where to get them: Cloudflare dashboard -> R2 -> Manage R2 API Tokens (scope the token to your bucket).
+
+**2. Start it:**
+
+```sh
+docker compose up
+```
+
+First run downloads the CogVideoX weights (~22GB, once). Then the `ready` service prints a banner with
+your **Backend URL + token**, copy-paste ready.
+
+**3. Paste that URL + token** into your Vivijure studio's "Local (your GPU)" door, pick it, and render.
+A real clip comes back from your own card. That is the whole setup -- no tunnel to configure, no account.
+
+> Forgot the R2 creds? The logs tell you exactly which values to set and to run `docker compose up`
+> again -- a plain message, not a stack trace.
 
 Needs an NVIDIA GPU with **16GB+ VRAM** + the
 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
 CogVideoX-5B needs CPU offload on any consumer card; a 12GB or 14GB card OOMs on the full 49-frame tiers
-(measured).
+(measured). The full walkthrough (tunnel, trade-offs, troubleshooting) is
+**[docs/HOMELABBER.md](docs/HOMELABBER.md)**; studio-side wiring is
+**[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 
 ## Configuration (`.env`)
 

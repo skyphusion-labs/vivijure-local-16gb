@@ -16,11 +16,20 @@ You need: an NVIDIA CUDA GPU, **Docker**, and the
 (one install so the container can see your GPU). CogVideoX-5B needs CPU offload on any consumer card, so
 a mid-to-high VRAM card is recommended; the exact floor is pinned by the benchmark. That's it.
 
+ONE setup step before you start: your Vivijure studio's Cloudflare R2 credentials (this backend shares
+that bucket -- it reads the keyframe and writes the finished clip there). Get them from the Cloudflare
+dashboard -> R2 -> Manage R2 API Tokens, scoped to your bucket.
+
 ```sh
-git clone https://github.com/skyphusion-labs/vivijure-local-cogvideox
-cd vivijure-local-cogvideox
+git clone https://github.com/skyphusion-labs/vivijure-local-16gb
+cd vivijure-local-16gb
+cp .env.example .env
+# edit .env: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (R2_BUCKET defaults to "vivijure")
 docker compose up
 ```
+
+(Forgot the R2 creds? The backend prints a plain message telling you exactly what to set -- not a stack
+trace -- and you just run `docker compose up` again.)
 
 That's the whole setup. The stack starts your render backend, opens its own secure tunnel, downloads
 the model once, and then prints a banner like this:

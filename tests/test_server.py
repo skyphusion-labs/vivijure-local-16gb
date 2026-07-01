@@ -146,3 +146,30 @@ def test_i2v_run_fn_fetches_keyframe_animates_and_uploads_pointer(monkeypatch, t
     assert calls["get"] == "renders/My_Film/keyframes/shot_02.png"
     assert calls["put"] == "renders/My_Film/clips/shot_02_i2v.mp4"
     assert out["clip_key"] == "renders/My_Film/clips/shot_02_i2v.mp4" and out["num_frames"] == 49
+
+
+def test_preflight_r2_passes_when_all_present(monkeypatch):
+    # all four required R2 vars set -> no exit, no message
+    for k in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"):
+        monkeypatch.setenv(k, "x")
+    logs = []
+    from vivijure_local.server import preflight_r2_or_exit
+    preflight_r2_or_exit(logger=logs.append, sleep_s=0)  # returns None, does not raise
+    assert logs == []
+
+
+def test_preflight_r2_exits_with_plain_message_when_missing(monkeypatch):
+    # missing R2 creds -> a plain actionable message + SystemExit(1), never a traceback, no value echo
+    import pytest
+
+    for k in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"):
+        monkeypatch.delenv(k, raising=False)
+    logs = []
+    from vivijure_local.server import preflight_r2_or_exit
+    with pytest.raises(SystemExit) as ei:
+        preflight_r2_or_exit(logger=logs.append, sleep_s=0)
+    assert ei.value.code == 1
+    blob = "\n".join(logs)
+    assert "R2 credentials are not set" in blob
+    assert "docker compose up" in blob            # actionable next step
+    assert "R2_ACCOUNT_ID" in blob                # names which var is missing (not its value)

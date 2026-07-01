@@ -58,7 +58,7 @@ def route(
     I/O of its own (the registry's run_fn does the work on its worker thread), so it unit-tests
     directly. Mirrors the RunPod envelope the local-gpu module expects."""
     if method == "GET" and path == "/health":
-        return 200, {"ok": True, "service": "vivijure-local-cogvideox", "version": version, "engine": "cogvideox"}
+        return 200, {"ok": True, "service": "vivijure-local-16gb", "version": version, "engine": "cogvideox"}
 
     if method == "POST" and path == "/run":
         payload = (body or {}).get("input", body or {})
@@ -196,6 +196,42 @@ def apply_vram_cap(logger=None) -> float | None:
 
 # --------------------------------------------------------------------------- HTTP shell
 
+def preflight_r2_or_exit(logger=None, *, sleep_s: float = 30.0) -> None:
+    """Novice-first startup guard: R2 is the ONE thing the operator must supply (this backend shares
+    the studio's Cloudflare R2 bucket -- it reads the keyframe and writes the finished clip there). If
+    the creds are missing, print a PLAIN, actionable message (never a stack trace) and exit slowly so a
+    `restart: unless-stopped` container does not spew a tight crash-loop. Everything else (tunnel, token)
+    is zero-config. This does NOT echo any value; it only names which vars are unset."""
+    import time
+
+    log = logger or (lambda m: print(m, flush=True))
+    required = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET")
+    missing = [k for k in required if not os.environ.get(k)]
+    if not missing:
+        return
+    line = "=" * 68
+    log("\n".join([
+        "", line,
+        "  vivijure-local-16gb: your R2 credentials are not set yet.",
+        "",
+        "  This backend shares your Vivijure studio's Cloudflare R2 bucket -- it reads",
+        "  the keyframe and writes the finished clip there. It is the ONE thing you must",
+        "  set up; the tunnel and access token are automatic.",
+        "",
+        "  FIX (about a minute):",
+        "    1. cp .env.example .env",
+        "    2. put your R2 credentials in .env -- currently missing:",
+        "         " + ", ".join(missing),
+        "    3. docker compose up            (run it again)",
+        "",
+        "  Get the values: Cloudflare dashboard -> R2 -> Manage R2 API Tokens",
+        "  (scope the token to your bucket). Full details in README.md -> Configuration.",
+        line, "",
+    ]))
+    time.sleep(sleep_s)  # keep the message readable under restart: unless-stopped (no traceback flood)
+    raise SystemExit(1)
+
+
 def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
     """Wire R2 + the CogVideoX engine + the registry and serve. The store + registry build BEFORE the socket
     binds so a misconfig fails loud at startup, not mid-render."""
@@ -203,6 +239,7 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
 
     from .r2 import R2, R2Config  # deferred: boto3 lives only in the GPU runtime image
 
+    preflight_r2_or_exit()  # novice-first: a plain, actionable message if R2 is unset (not a traceback)
     apply_vram_cap()  # honor VIVIJURE_MAX_VRAM_GB before anything can touch the GPU
     expected_token = os.environ.get("LOCAL_BACKEND_TOKEN", "") or ""
     store = R2(R2Config.from_env())
@@ -244,7 +281,7 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
             pass
 
     httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f"vivijure-local-cogvideox serving on {host}:{port} (engine=cogvideox)", flush=True)
+    print(f"vivijure-local-16gb serving on {host}:{port} (engine=cogvideox)", flush=True)
     try:
         httpd.serve_forever()
     finally:

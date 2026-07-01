@@ -7,7 +7,7 @@ The running build/validation log for the CogVideoX local door. Newest first.
 CogVideoX-5B-I2V local door scaffolded from the shipped LTX door (`vivijure-local-12gb`), swapping ONLY
 the model-load + inference layer; the model-agnostic parts (HTTP server, R2 store, job/status/cancel
 registry, `VIVIJURE_MAX_VRAM_GB` cap, docker-compose homelabber stack) are unchanged in shape. Working
-name `vivijure-local-cogvideox` (prove-then-name: the public name encodes the proven VRAM tier after
+name `vivijure-local-16gb` (prove-then-name: the public name encodes the proven VRAM tier after
 Milestone 2). No GitHub repo yet (held for lead's go). Package stays `vivijure_local` (internal name).
 
 What changed vs the LTX scaffold:
@@ -24,7 +24,7 @@ What changed vs the LTX scaffold:
 - `server.py`: engine string `cogvideox`, run_fn wired to `i2v_cogvideox.animate`. Contract, R2, jobs,
   auth (token-required i2v behind the public tunnel), and the RunPod-compatible envelope are UNCHANGED.
 - docker-compose / Dockerfile / .env.example: service + image + container renamed to
-  `vivijure-local-cogvideox`; cloudflared + ready/announce services unchanged. Weights-cache comments
+  `vivijure-local-16gb`; cloudflared + ready/announce services unchanged. Weights-cache comments
   updated (CogVideoX weights are larger than LTX).
 - Docs: README / CLAUDE.md / architecture.md / HOMELABBER.md / INTEGRATION.md / i2v-model-selection.md
   reframed for the CogVideoX (fidelity) door; all LTX 12GB PROOF numbers removed (they are the LTX

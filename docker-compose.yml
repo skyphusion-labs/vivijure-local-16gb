@@ -1,4 +1,4 @@
-# vivijure-local-cogvideox: ONE command -> the CogVideoX i2v render server on YOUR GPU + its own tunnel + a
+# vivijure-local-16gb: ONE command -> the CogVideoX i2v render server on YOUR GPU + its own tunnel + a
 # copy-paste "ready" banner. No tunnel setup, no account, no networking knowledge. That's the whole bar:
 # transparent + easy.
 #
@@ -14,12 +14,12 @@
 # i2v endpoint refuses to serve open). The token auto-generates if you don't set one; the banner shows it.
 
 services:
-  vivijure-local-cogvideox:
+  vivijure-local-16gb:
     build:
       context: .
       dockerfile: deploy/Dockerfile
-    image: vivijure-local-cogvideox:local
-    container_name: vivijure-local-cogvideox
+    image: vivijure-local-16gb:local
+    container_name: vivijure-local-16gb
     restart: unless-stopped
     expose:
       - "8000"                       # internal only; the tunnel is the way in
@@ -66,7 +66,7 @@ services:
     container_name: vivijure-cloudflared
     restart: unless-stopped
     depends_on:
-      - vivijure-local-cogvideox
+      - vivijure-local-16gb
     env_file:
       - .env
     volumes:
@@ -79,22 +79,22 @@ services:
         if [ -n "$$TUNNEL_TOKEN" ]; then
           exec cloudflared tunnel --no-autoupdate run --token "$$TUNNEL_TOKEN";
         else
-          cloudflared tunnel --no-autoupdate --url http://vivijure-local-cogvideox:8000 2>&1 | tee /shared/cf.log;
+          cloudflared tunnel --no-autoupdate --url http://vivijure-local-16gb:8000 2>&1 | tee /shared/cf.log;
         fi
 
   # The "ready" banner: waits for the tunnel up + backend healthy + token written, then prints the
   # copy-paste Backend URL + token ONCE and idles. The user reads THIS, never the raw logs.
   ready:
-    image: vivijure-local-cogvideox:local
+    image: vivijure-local-16gb:local
     container_name: vivijure-ready
     restart: unless-stopped
     depends_on:
-      - vivijure-local-cogvideox
+      - vivijure-local-16gb
       - cloudflared
     env_file:
       - .env
     environment:
-      ANNOUNCE_BACKEND: "http://vivijure-local-cogvideox:8000"
+      ANNOUNCE_BACKEND: "http://vivijure-local-16gb:8000"
     volumes:
       - vivijure_runtime:/shared
     command: ["python3", "-m", "vivijure_local.announce"]

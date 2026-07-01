@@ -1,4 +1,4 @@
-# vivijure-local-cogvideox runtime stack (the CogVideoX consumer door). CogVideoX-5B-I2V image-to-video
+# vivijure-local-16gb runtime stack (the CogVideoX consumer door). CogVideoX-5B-I2V image-to-video
 # on a single consumer card, plus R2 object I/O. torch/torchvision are installed from the CUDA index in
 # deploy/Dockerfile (matched to the card's CUDA line). diffusers/transformers are PINNED to the exact
 # set already validated against torch 2.4.1 in the LTX door's container proof: CogVideoXImageToVideoPipeline

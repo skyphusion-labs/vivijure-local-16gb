@@ -125,7 +125,7 @@ run the benchmark on a RunPod COMMUNITY pod (secure cloud only; a hard rule).
 ## Crew + identity
 
 - The FIRST command in any op is the member's own login shell: `sudo -u <member> bash -lc '<ops>'`
-  (loads their `$HOME`, their `~/dev/vivijure-local-cogvideox` clone, their gh / R2 creds). Commits and
+  (loads their `$HOME`, their `~/dev/vivijure-local-16gb` clone, their gh / R2 creds). Commits and
   PRs land under the member's `skyphusion-<member>` identity, never Conrad's.
 - Operating memory for the vivijure family lives in the per-project memory under
   `~/.claude/projects/-home-conrad-dev-vivijure/memory/` (`seg-vivijure-modules` covers the cost doors,

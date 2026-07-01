@@ -1,4 +1,4 @@
-"""vivijure-local-cogvideox: the local-consumer render engine (the CogVideoX door).
+"""vivijure-local-16gb: the local-consumer render engine (the CogVideoX door).
 
 The fidelity sibling of the LTX door (vivijure-local-12gb) and the deliberate opposite of
 vivijure-backend (the RunPod datacenter engine). Runs CogVideoX-5B-I2V image-to-video on a single
