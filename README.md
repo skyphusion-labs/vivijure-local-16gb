@@ -19,6 +19,64 @@ below).
 control plane --> local-gpu module (CF Worker) --/run--> tunnel --> THIS backend (CogVideoX-5B-I2V, 16GB)
 ```
 
+## Where this fits: the constellation
+
+Vivijure is not one program. It is a small group of programs that work together (we call the
+whole group the **constellation**). The **Studio** is the control plane; it decides what runs and
+hands the heavy render work to a GPU engine. This repo is one box on that map: the own-GPU local
+render door. You choose it, and the render happens on the graphics card in your own computer.
+
+```mermaid
+flowchart TD
+    subgraph front[You and your friends]
+        discord[Discord chat]
+        ui[Studio web page]
+    end
+
+    slate[slate<br/>Discord screenwriter bot]
+
+    subgraph core[The control plane]
+        studio[vivijure Studio<br/>projects, storyboard, cast,<br/>render orchestration + module registry]
+    end
+
+    subgraph modules[Modules: one job each, opt-in]
+        cloudmods[Cloud video modules<br/>Seedance, Kling, Veo, Wan, ...]
+        finishmods[Finish modules<br/>upscale, smooth, lip-sync, titles]
+        audiomods[Audio modules<br/>music, narration]
+    end
+
+    subgraph gpu[The GPU render engines]
+        backend[vivijure-backend<br/>RunPod cloud GPU:<br/>keyframes, image-to-video, LoRA training]
+        local12[vivijure-local-12gb<br/>your own 12GB card LTX]
+        local16[vivijure-local-16gb<br/>your own 16GB card CogVideoX]
+    end
+
+    subgraph finish[Finish helper engines]
+        musetalk[vivijure-musetalk<br/>lip-sync]
+        upscale[vivijure-upscale<br/>video upscale]
+        audioup[vivijure-audio-upscale<br/>audio cleanup]
+    end
+
+    discord --> slate
+    slate --> studio
+    ui --> studio
+    studio --> cloudmods
+    studio --> finishmods
+    studio --> audiomods
+    cloudmods --> backend
+    finishmods --> musetalk
+    finishmods --> upscale
+    audiomods --> audioup
+    studio --> backend
+    studio --> local12
+    studio --> local16
+```
+
+**You are here:** vivijure-local-16gb is the own-GPU local render door (CogVideoX, 16GB card).
+
+The full map, the same one every constellation repo shows, and how to read it, is in
+**[docs/constellation.md](docs/constellation.md)**.
+
 ## Quickstart (your first run)
 
 You need **one** thing before you start: your Vivijure studio's **Cloudflare R2 credentials**. This
@@ -68,6 +126,18 @@ Copy `.env.example` to `.env` and fill it in. Every setting is an environment va
 | `LOCAL_BACKEND_TOKEN` | no | auto-generated | The bearer token every i2v request must carry (the tunnel is public). Blank => a strong one is generated and printed in the banner; set it for a stable token across restarts. |
 | `TUNNEL_TOKEN` | no | quick tunnel | A Cloudflare named-tunnel token for a STABLE hostname. Blank => a zero-config TryCloudflare quick tunnel (URL changes each restart). |
 | `VIVIJURE_MAX_VRAM_GB` | no | full card | Cap the VRAM vivijure claims, in GB, when you share the card with other workloads. The backend pins torch to that fraction of the card at startup. Blank (or a value >= your card's size) => use the whole card. On a 16GB card, leave it blank -- the full 49-frame tiers need the whole card. |
+
+The full reference -- every `.env` value, every built-in setting, the ports, the volumes, and the
+per-clip settings the Studio sends -- is in **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**. You
+should never need to open the compose file or the source to learn what a knob does.
+
+### How your Studio reaches this door
+
+The wiring is the same whether you self-host the whole Studio or point a hosted one at your box: the
+Studio stores this backend's tunnel URL (`LOCAL_BACKEND_URL`) and the matching token, and its
+`local-gpu` module calls this backend directly. There is no shared, multi-tenant path -- your
+backend serves only the Studio you hand its URL to. The full studio-side wiring (bindings, secrets,
+and the ordered flip) is in **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 
 ## What it runs
 
