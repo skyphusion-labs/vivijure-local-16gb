@@ -1,0 +1,42 @@
+name: coverage
+
+# Real, inspectable coverage for the CPU logic suite, uploaded as a build artifact. Mirrors the studio
+# (vivijure) code-coverage workflow shape + naming so the required check context lines up ("coverage").
+# Same CPU-only surface as tests.yml: config / vram / frame math / jobs / server routing measure without
+# torch/diffusers/boto3 (deferred-imported in the engine + pod-validated on the card), so it is fast and
+# GPU-free. Public repo -> GitHub-hosted ubuntu-latest (fork-safe), never the fleet pool.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least-privilege CI token: this suite only reads the code and runs pytest; it never writes the repo,
+# pushes images, or needs a secret. contents:read caps the GITHUB_TOKEN on push-to-main (fork PRs are
+# already read-only + secretless under pull_request).
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install CPU dev deps (pytest + coverage; no torch)
+        run: pip install -r requirements-dev.txt
+      - name: Run the CPU suite with coverage
+        run: pytest -q --cov=src --cov-report=xml --cov-report=term
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          if-no-files-found: warn
+          retention-days: 14

@@ -14,3 +14,7 @@ __pycache__/
 # never commit a real .env (downstream users cp .env.example .env with their creds)
 .env
 .dev.vars
+
+# coverage artifacts (code-coverage.yml)
+.coverage
+coverage.xml
