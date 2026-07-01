@@ -1,24 +1,22 @@
-# vivijure-local-cogvideox
-
-> **WORKING NAME / PRE-PROOF.** This is the CogVideoX local door, scaffolded from the shipped LTX door
-> ([vivijure-local-12gb](https://github.com/skyphusion-labs/vivijure-local-12gb)). The public repo name
-> will encode the **proven** VRAM tier once the card benchmark measures it (prove-then-name, exactly
-> like LTX). The VRAM numbers below are targets/estimates, NOT measured -- see
-> [docs/live-benchmark-plan.md](docs/live-benchmark-plan.md).
+# vivijure-local-16gb
 
 The **local-consumer** render backend for Vivijure, fidelity variant: image-to-video on a **single
-consumer GPU** running **CogVideoX-5B-I2V** in your own homelab. The sibling of the LTX door (which
-trades fidelity for speed) and the deliberate opposite of
-[vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (the RunPod datacenter engine,
-Wan 2.2 on H200/B200).
+16GB consumer GPU** running **CogVideoX-5B-I2V** in your own homelab. The higher-fidelity sibling of the
+[LTX door](https://github.com/skyphusion-labs/vivijure-local-12gb) (12GB, lean + fast) and the
+deliberate opposite of [vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (the
+RunPod datacenter engine, Wan 2.2 on H200/B200).
+
+> **16GB floor, PROVEN.** The VRAM floor was measured on real silicon (RTX 4090 24GB, cap-swept down):
+> the full 49-frame tiers fit a 16GB card and OOM at 14GB and 12GB. Numbers below are measured, not
+> estimated. Full proof: [docs/proof/RESULTS.md](docs/proof/RESULTS.md).
 
 **One studio, many honest doors.** The studio's `motion.backend` hook makes the clip engine pluggable.
 The control plane is unchanged; the user picks the door: rent datacenter GPU, or run it on silicon they
-already own (LTX for speed, CogVideoX for fidelity). This backend is a local door -- no rent, no cloud
-GPU at all, reached over a Cloudflare tunnel that terminates at the box.
+already own. **Pick this 16GB door for fidelity; pick the 12GB LTX door for speed** (see the trade
+below).
 
 ```
-control plane --> local-gpu module (CF Worker) --/run--> tunnel --> THIS backend (CogVideoX-5B-I2V)
+control plane --> local-gpu module (CF Worker) --/run--> tunnel --> THIS backend (CogVideoX-5B-I2V, 16GB)
 ```
 
 ## Run it on your own box (one command)
@@ -34,9 +32,10 @@ homelabber walkthrough (prereqs, tunnel, honest trade-offs, troubleshooting) is
 **[docs/HOMELABBER.md](docs/HOMELABBER.md)**; the studio-side wiring is
 **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 
-Needs an NVIDIA GPU + the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
-The minimum card is pinned by the benchmark (Milestone 2); CogVideoX-5B needs CPU offload on any
-consumer card, so expect a larger VRAM floor (and slower clips) than the LTX door.
+Needs an NVIDIA GPU with **16GB+ VRAM** + the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+CogVideoX-5B needs CPU offload on any consumer card; a 12GB or 14GB card OOMs on the full 49-frame tiers
+(measured).
 
 ## Configuration (`.env`)
 
@@ -48,7 +47,7 @@ Copy `.env.example` to `.env` and fill it in. Every setting is an environment va
 | `R2_BUCKET` | no | `vivijure` | The shared bucket name. |
 | `LOCAL_BACKEND_TOKEN` | no | auto-generated | The bearer token every i2v request must carry (the tunnel is public). Blank => a strong one is generated and printed in the banner; set it for a stable token across restarts. |
 | `TUNNEL_TOKEN` | no | quick tunnel | A Cloudflare named-tunnel token for a STABLE hostname. Blank => a zero-config TryCloudflare quick tunnel (URL changes each restart). |
-| `VIVIJURE_MAX_VRAM_GB` | no | full card | Cap the VRAM vivijure claims, in GB, when you share the card with other workloads. The backend pins torch to that fraction of the card at startup. Blank (or a value >= your card's size) => use the whole card. |
+| `VIVIJURE_MAX_VRAM_GB` | no | full card | Cap the VRAM vivijure claims, in GB, when you share the card with other workloads. The backend pins torch to that fraction of the card at startup. Blank (or a value >= your card's size) => use the whole card. On a 16GB card, leave it blank -- the full 49-frame tiers need the whole card. |
 
 ## What it runs
 
@@ -60,20 +59,33 @@ it renders 720x480 at up to 49 frames @ 8 fps (~6s), and degrades off that grid,
 tiers differ by inference **steps** (and, for `draft`, a shorter clip) -- NOT resolution. `final` is
 the card's honest ceiling, not datacenter parity.
 
-| Tier | Resolution | Frames | Steps | Offload | Peak VRAM | sec/clip |
-|---|---|---|---|---|---|---|
-| `draft` | 720x480 | 25 | 30 | model-CPU-offload + VAE tiling/slicing | TBD (Milestone 2) | TBD |
-| `standard` | 720x480 | 49 (~6s) | 40 | model-CPU-offload + VAE tiling/slicing | TBD | TBD |
-| `final` | 720x480 | 49 (~6s) | 50 | model-CPU-offload + VAE tiling/slicing | TBD | TBD |
+Measured on the real shipped container (RTX 4090 24GB Ada, `enable_model_cpu_offload()` + VAE
+tiling/slicing, bf16; cold model-load 29s). Peak VRAM below is `max_memory_allocated` (the true need):
 
-> **NOT YET PROVEN.** Unlike the LTX door (proven at a 12GB budget), CogVideoX-5B's real VRAM floor and
-> per-clip wall-clock are pinned on real silicon in Milestone 2 (the spend gate,
-> [docs/live-benchmark-plan.md](docs/live-benchmark-plan.md)). CogVideoX-5B is much heavier than LTX (a
-> 5B DiT transformer + a large T5-XXL text encoder), so it needs CPU offload on any consumer card;
-> model-CPU-offload + VAE tiling/slicing is the scaffold default, and sequential offload is the
-> low-VRAM (but slow) fallback the budgeter down-shifts to if a smaller card needs it. Community reports
-> put a full-step CogVideoX-5B clip in the minutes-per-clip range on a consumer card -- the fidelity/
-> speed trade against LTX is deliberate.
+| Tier | Resolution | Frames | Steps | Peak VRAM (alloc) | sec/clip |
+|---|---|---|---|---|---|
+| `draft` | 720x480 | 25 (~3.1s) | 30 | 12.35 GB | ~98s (~1.6 min) |
+| `standard` | 720x480 | 49 (~6.1s) | 40 | 13.57 GB | ~243s (~4 min) |
+| `final` | 720x480 | 49 (~6.1s) | 50 | 13.57 GB | ~299s (~5 min) |
+
+Peak is **flat** across `standard`/`final` (the 49-frame VAE decode bounds it), so higher steps cost
+**time, not VRAM**. All tiers use model-CPU-offload + VAE tiling/slicing.
+
+> **SPEED CAVEAT.** Those sec/clip figures were measured on an **RTX 4090 24GB**. A 3060 / 4070 /
+> 4060 Ti-class **16GB** card runs **slower** -- expect longer per-clip times on a smaller card. The
+> 16GB floor is about FIT (does it run without OOM), proven by cap-sweep; speed scales with your card.
+
+### The trade vs the 12GB LTX door
+
+| | This door (16GB, CogVideoX) | LTX door (12GB) |
+|---|---|---|
+| Strength | **Fidelity** (best local i2v quality) | **Speed** (few-step, sub-minute class) |
+| Engine | CogVideoX-5B-I2V (5B DiT + T5-XXL) | LTX-Video (light, distilled) |
+| VRAM floor | 16GB (proven) | 12GB (proven) |
+| Per-clip | minutes | sub-minute to ~2 min |
+
+Heavier model, higher fidelity, bigger card, slower clips -- the honest opposite of the lean/fast LTX
+door. Run whichever fits your card and your patience.
 
 ## The job API (RunPod-compatible)
 
@@ -108,9 +120,9 @@ absent -- a producer stage never ships a fake clip.
 ## The benchmark (proof gate)
 
 `scripts/benchmark.py` runs the CogVideoX i2v engine across the three tiers on the card, capturing fit
-(peak VRAM / OOM), speed (sec/clip), and a real sample clip per tier, then writes a report. It is
-**ready to fire** the instant the hardware is chosen; it does NOT run without a GPU (the spend gate).
-See [docs/live-benchmark-plan.md](docs/live-benchmark-plan.md) for the costed plan.
+(peak VRAM / OOM), speed (sec/clip), and a real sample clip per tier, then writes a report. It is how
+the 16GB floor was proven ([docs/proof/RESULTS.md](docs/proof/RESULTS.md)); it does NOT run without a
+GPU. See [docs/live-benchmark-plan.md](docs/live-benchmark-plan.md) for the method.
 
 ## Security boundary
 
