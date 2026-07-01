@@ -1,0 +1,4 @@
+# CPU dev/test deps ONLY. The pure logic (config, vram, frame math, jobs, server routing) tests
+# without torch/diffusers/boto3 -- those are deferred-imported in the engine + R2 + server modules and
+# pod-validated on the card (see docs/live-benchmark-plan.md). So the CPU suite needs just pytest.
+pytest>=8.0

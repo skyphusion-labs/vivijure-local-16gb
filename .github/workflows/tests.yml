@@ -1,0 +1,35 @@
+name: tests
+
+# CPU test suite for the local-consumer backend. The pure logic (config, vram, frame math, the job
+# registry, the server router) tests without torch/diffusers/boto3 -- those are deferred-imported in the
+# engine + validated on the card (docs/live-benchmark-plan.md) -- so CI is fast and GPU-free.
+#
+# Runner: GitHub-hosted ubuntu-latest (fork-safe). Per the org runner policy public repos build on
+# GitHub-hosted runners; this repo flips public at announce, so ubuntu-latest is the safe choice now.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least-privilege CI token (fork-safety + public-repo hardening): this suite only reads the
+# code and runs pytest -- it never writes the repo, pushes images, or needs any secret. Pinning
+# contents:read caps the GITHUB_TOKEN on push-to-main runs (fork PRs are already read-only +
+# secretless under pull_request). No secrets, no self-hosted runner, no fleet-internal pulls.
+permissions:
+  contents: read
+
+jobs:
+  cpu-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install CPU dev deps (pytest only; no torch)
+        run: pip install -r requirements-dev.txt
+      - name: Syntax-compile the engine + benchmark
+        run: python -m py_compile src/vivijure_local/*.py scripts/benchmark.py
+      - name: Run the CPU suite
+        run: pytest -q

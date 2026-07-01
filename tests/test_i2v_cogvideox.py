@@ -1,0 +1,56 @@
+"""Pure frame/dimension math for the CogVideoX engine (no torch, no GPU)."""
+from vivijure_local import i2v_cogvideox as eng
+from vivijure_local.config import I2VConfig, QualityTier
+
+
+def test_snap_frames_rounds_up_to_4k_plus_1():
+    assert eng.snap_frames(1) == 1            # 4*0+1
+    assert eng.snap_frames(5) == 5            # 4*1+1 exact
+    assert eng.snap_frames(6) == 9            # round up to 4*2+1
+    assert eng.snap_frames(25) == 25          # 4*6+1 exact
+    assert (eng.snap_frames(24) - 1) % eng.TEMPORAL_STRIDE == 0
+
+
+def test_snap_frames_clamps_below_the_ceiling_and_stays_valid():
+    n = eng.snap_frames(10_000)
+    assert n <= eng.MAX_FRAMES                 # capped at the 49-frame CogVideoX-5B-I2V ceiling
+    assert n == 49
+    assert (n - 1) % eng.TEMPORAL_STRIDE == 0  # still 4k+1 after the clamp
+
+
+def test_snap_dim_rounds_down_to_multiple_of_16_with_a_floor():
+    assert eng.snap_dim(720) == 720
+    assert eng.snap_dim(700) == 688           # rounds DOWN (a clamped ceiling stays a ceiling)
+    assert eng.snap_dim(10) == 16             # floor
+
+
+def test_frames_for_derives_from_seconds_and_caps():
+    assert eng.frames_for(6, 8) == 49         # 48 -> 4*12+1, at the ceiling
+    assert eng.frames_for(None, 8) <= eng.MAX_FRAMES
+    assert eng.frames_for(0, 8) <= eng.MAX_FRAMES
+
+
+def test_clip_seconds_is_frames_over_fps():
+    assert eng.clip_seconds(49, 8) == round(49 / 8, 3)
+
+
+def test_resolve_engine_dims_snaps_both_axes_and_frames():
+    cfg = I2VConfig.from_request({"quality": "standard"}, tier=QualityTier.STANDARD)
+    w, h, n = eng.resolve_engine_dims(cfg)
+    assert w % 16 == 0 and h % 16 == 0
+    assert (n - 1) % eng.TEMPORAL_STRIDE == 0
+
+
+def test_animate_raises_without_torch_rather_than_faking_output():
+    # A producer stage never fakes a clip; with no torch/diffusers present the body must raise.
+    import pytest
+
+    cfg = I2VConfig.from_request({"quality": "draft"}, tier=QualityTier.DRAFT)
+    try:
+        import torch  # noqa: F401
+        import diffusers  # noqa: F401
+    except Exception:
+        with pytest.raises(RuntimeError):
+            eng.animate("shot_01", __file__, "a slow dolly in", cfg, "/tmp/none.mp4")
+    else:
+        pytest.skip("torch+diffusers present; the deferred-import guard cannot be exercised here")

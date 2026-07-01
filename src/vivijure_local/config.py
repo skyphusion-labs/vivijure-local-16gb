@@ -1,0 +1,185 @@
+"""Consumer-scoped render config for the local backend (the CogVideoX door).
+
+This is the honest counterpart to vivijure-backend's `config.py`, and the fidelity sibling of the LTX
+door's config. The datacenter backend maps the quality tiers (draft / standard / final) onto Wan 2.2
+A14B step counts and datacenter GPU classes (RTX PRO 6000 / H200 / B200). THIS backend maps the SAME
+tier vocabulary onto CogVideoX-5B-I2V engine configs a single consumer card can ACTUALLY run -- so
+"final" here is the card's honest ceiling, NOT datacenter parity.
+
+Why the tiers keep the same names: the control plane owns the tier set (QUALITY_TIERS) and INJECTS
+the chosen tier into every motion.backend module as `quality`. `validateConfig` silently DROPS an
+injected value not in the module's enum, so the local-gpu module's enum stays draft/standard/final
+(see vivijure/tests/quality-tier-drift.test.ts, #124). The HONESTY is in the engine mapping below and
+in `docs/i2v-model-selection.md`, not in renaming the tiers.
+
+CogVideoX-5B-I2V is FIXED-GRID: it is trained/validated at 720x480 x 49 frames @ 8 fps and degrades
+badly off that grid, so -- unlike the LTX door, where the tiers scale resolution -- these tiers differ
+by inference STEPS and frame COUNT (speed vs fidelity), holding resolution at the model's native grid.
+That is an honest property of the model.
+
+These numbers are SCAFFOLD DEFAULTS. The offload mode + VRAM floor that genuinely fit a consumer card
+can only be finalized by a live benchmark on real silicon (docs/live-benchmark-plan.md); until then
+they are conservative and tunable via env. Nothing here trains or generates; this module is pure +
+CPU-importable (no torch), exactly like vivijure-backend's config.py.
+"""
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, replace
+from enum import Enum
+
+
+class QualityTier(str, Enum):
+    """The control-plane tier vocabulary. Parsed leniently; unknown -> STANDARD (the safe middle)."""
+
+    DRAFT = "draft"
+    STANDARD = "standard"
+    FINAL = "final"
+
+    @classmethod
+    def parse(cls, v: object) -> "QualityTier":
+        try:
+            return cls(str(v).strip().lower())
+        except Exception:
+            return cls.STANDARD
+
+
+class Offload(str, Enum):
+    """How aggressively the diffusers pipeline trades speed for VRAM headroom. Ordered weakest ->
+    strongest. The stronger the offload, the more the card fits but the slower the run (sequential
+    shuttles each layer on/off the GPU per step). CogVideoX-5B carries a large T5 text encoder plus a
+    5B transformer, so offload is not optional on a consumer card -- the only question is which mode."""
+
+    NONE = "none"                      # everything resident on the GPU (only a big card; CogVideoX-5B OOMs 16GB here)
+    MODEL_CPU_OFFLOAD = "model"        # whole submodules paged to CPU between uses (diffusers enable_model_cpu_offload)
+    SEQUENTIAL_CPU_OFFLOAD = "sequential"  # per-layer paging (slowest, smallest footprint; the low-VRAM fallback)
+
+
+# The CogVideoX i2v variant this door targets. Phase A = the 5B-I2V model (the fidelity leader, custom
+# CogVideoX license, register + 1M-visits/mo cap -- see docs/i2v-model-selection.md). Phase B (a FUTURE
+# milestone, not wired here) adds CogVideoX1.5-5B-I2V as a higher tier (720p, up to 81 frames). The
+# offload mode + real VRAM floor are pinned by the card benchmark (docs/proof/RESULTS.md, Milestone 2).
+COGVIDEOX_5B_I2V = "THUDM/CogVideoX-5b-I2V"
+
+
+@dataclass(frozen=True)
+class TierConfig:
+    """The engine knobs one quality tier maps to on a consumer card. The animate() body reads these; the
+    frame-count is derived per shot (config.py never fixes a film's length)."""
+
+    model: str
+    steps: int             # CogVideoX-5B-I2V: ~50 denoise steps is the model-card default; draft trims for speed
+    guidance_scale: float  # CogVideoX-5B-I2V sampling ~6.0 (the model card default)
+    width: int             # native grid 720x480; divisible by 16 (CogVideoX constraint), enforced in snap_dim
+    height: int
+    max_frames: int        # ceiling for this tier (snapped to 4k+1 by i2v_cogvideox.snap_frames, cap 49)
+    offload: Offload
+    vae_tiling: bool       # decode the VAE in tiles + slices to bound peak decode VRAM (the big consumer saver)
+
+
+# The honest CogVideoX ladder. Resolution is held at the model's native 720x480 across ALL tiers (the
+# model degrades off-grid); the tiers differ by STEPS (fidelity) and, for draft, a shorter clip (speed).
+# Offload defaults to model-cpu-offload + VAE tiling/slicing (Milestone 2 confirms whether that fits the
+# target card or whether the low-VRAM tier needs sequential offload). NOT datacenter parity; CogVideoX1.5
+# is the future higher tier.
+_TIERS: dict[QualityTier, TierConfig] = {
+    # Fast preview: fewer steps + a shorter clip. Lowest wall-clock (CogVideoX is a full-step model, so
+    # steps dominate runtime).
+    QualityTier.DRAFT: TierConfig(
+        model=COGVIDEOX_5B_I2V, steps=30, guidance_scale=6.0,
+        width=720, height=480, max_frames=25, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
+    ),
+    # The comfortable middle: the full 49-frame clip at a moderate step count.
+    QualityTier.STANDARD: TierConfig(
+        model=COGVIDEOX_5B_I2V, steps=40, guidance_scale=6.0,
+        width=720, height=480, max_frames=49, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
+    ),
+    # The card's HONEST ceiling: the model-card default 50 steps at the full 49-frame native grid.
+    QualityTier.FINAL: TierConfig(
+        model=COGVIDEOX_5B_I2V, steps=50, guidance_scale=6.0,
+        width=720, height=480, max_frames=49, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
+    ),
+}
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, "") or default)
+    except (TypeError, ValueError):
+        return default
+
+
+@dataclass(frozen=True)
+class I2VConfig:
+    """The per-shot i2v config the server hands the engine: a tier baseline with the caller's clamped
+    overrides layered on. Mirrors the wire body the local-gpu module sends (quality / num_frames / fps
+    / seed / flow_shift / negative_prompt), so the field names match end to end (no remap layer).
+    `flow_shift` is carried for wire parity with the LTX door but is inert for CogVideoX."""
+
+    tier: QualityTier
+    model: str
+    steps: int
+    guidance_scale: float
+    width: int
+    height: int
+    num_frames: int
+    fps: int
+    seed: int
+    flow_shift: float
+    offload: Offload
+    vae_tiling: bool
+    negative_prompt: str
+
+    @classmethod
+    def from_request(cls, cfg: dict, *, tier: QualityTier | None = None) -> "I2VConfig":
+        """Build from the i2v_clip job's `config` dict. The tier baseline is the source of truth; the
+        caller may narrow (never widen) it. width/height/num_frames default to the tier; an explicit
+        value is clamped to the tier ceiling so a caller can never push the card past its honest fit.
+        """
+        cfg = cfg or {}
+        t = tier or QualityTier.parse(cfg.get("quality"))
+        base = _TIERS[t]
+        # Frame count: caller's request, capped at the tier ceiling (the card's honest limit), then
+        # snapped to CogVideoX's 4k+1 stride by the engine. Default to the tier ceiling when unset.
+        req_frames = _coerce_int(cfg.get("num_frames"), base.max_frames)
+        num_frames = min(max(1, req_frames), base.max_frames)
+        # Resolution: clamp to the tier ceiling on each axis (never widen past the native grid).
+        width = min(base.width, _coerce_int(cfg.get("width"), base.width) or base.width)
+        height = min(base.height, _coerce_int(cfg.get("height"), base.height) or base.height)
+        seed = _coerce_int(cfg.get("seed"), -1)
+        fps = min(30, max(8, _coerce_int(cfg.get("fps"), 8)))
+        flow_shift = _coerce_float(cfg.get("flow_shift"), 5.0)
+        return cls(
+            tier=t, model=base.model, steps=base.steps, guidance_scale=base.guidance_scale,
+            width=width, height=height, num_frames=num_frames, fps=fps, seed=seed,
+            flow_shift=flow_shift, offload=base.offload, vae_tiling=base.vae_tiling,
+            negative_prompt=str(cfg.get("negative_prompt") or ""),
+        )
+
+    def with_dims(self, width: int, height: int) -> "I2VConfig":
+        """Return a copy following the keyframe's native dims (clamped to the tier ceiling), used when
+        the engine probes the actual keyframe size."""
+        return replace(self, width=min(self.width, width), height=min(self.height, height))
+
+
+def tier_config(tier: QualityTier) -> TierConfig:
+    """The engine baseline for a tier (a copy-safe frozen dataclass)."""
+    return _TIERS[tier]
+
+
+def _coerce_int(v: object, default: int) -> int:
+    try:
+        if v is None or isinstance(v, bool):
+            return default
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_float(v: object, default: float) -> float:
+    try:
+        if v is None or isinstance(v, bool):
+            return default
+        return float(v)
+    except (TypeError, ValueError):
+        return default

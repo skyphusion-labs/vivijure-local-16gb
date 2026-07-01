@@ -1,0 +1,28 @@
+# Dependabot for the CogVideoX local door.
+#
+# The diffusers/transformers pins are DELIBERATE and validated: diffusers==0.32.2 is the release where
+# CogVideoXImageToVideoPipeline is present AND that works on torch 2.4.1+cu124 (newer diffusers 0.38+
+# require a newer torch and break on 2.4). torch/torchvision are pinned in deploy/Dockerfile (installed
+# from the CUDA wheel index), not in requirements.txt, so pip Dependabot does not see them; they are
+# listed in the ignore block for the record. So: keep Dependabot for everything else (security +
+# routine bumps) but IGNORE the validated recipe pair -- a bump there is a manual, benchmark-gated
+# decision (docs/live-benchmark-plan.md), never an automated PR.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    ignore:
+      # The validated CogVideoX cu124 recipe -- bump only by hand, gated on the card benchmark.
+      - dependency-name: "diffusers"
+      - dependency-name: "transformers"
+      - dependency-name: "torch"
+      - dependency-name: "torchvision"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
