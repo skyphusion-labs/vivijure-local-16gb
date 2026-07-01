@@ -21,4 +21,4 @@ imageio-ffmpeg>=0.6.0      # export_to_video
 av>=17.1.0                 # frame-accurate clip write
 
 # --- object storage (shared vivijure R2 bucket) ---
-boto3>=1.34.0
+boto3>=1.43.38
