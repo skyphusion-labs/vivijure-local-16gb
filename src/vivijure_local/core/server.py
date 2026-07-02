@@ -10,8 +10,12 @@ status envelope -- so the CF bridge is a near-clone and the control plane is unc
   POST /run { "selftest": true } -> a no-GPU sanity probe (the shared transport harness, like the modules)
 
 Stdlib only (the CLAUDE.md minimal-deps rule): http.server + the JobRegistry. The routing is a PURE
-`route()` function (testable without sockets); the HTTP handler is a thin shell over it. R2 + the CogVideoX
+`route()` function (testable without sockets); the HTTP handler is a thin shell over it. R2 + the door's
 engine are wired in `build_i2v_run_fn` and injected, so the server module stays importable on a CPU box.
+
+This module is part of the byte-identical `vivijure_local.core` package shared with the sibling door;
+the per-door identity + engine binding it reads (SERVICE, ENGINE, animate) live in `vivijure_local.door`.
+See docs/architecture.md (shared core).
 """
 from __future__ import annotations
 
@@ -23,9 +27,10 @@ import tempfile
 from pathlib import Path
 from typing import Callable
 
-from . import __version__
+from .. import __version__
+from ..door import ENGINE, SERVICE, animate
 from .contract import I2VClipRequest, clip_key_for, keyframe_key_for
-from .jobs import Cancelled, JobRegistry, JobStatus
+from .jobs import Cancelled, JobRegistry
 
 _STATUS_RE = re.compile(r"^/status/([A-Za-z0-9]+)$")
 _CANCEL_RE = re.compile(r"^/cancel/([A-Za-z0-9]+)$")
@@ -60,12 +65,12 @@ def route(
     I/O of its own (the registry's run_fn does the work on its worker thread), so it unit-tests
     directly. Mirrors the RunPod envelope the local-gpu module expects."""
     if method == "GET" and path == "/health":
-        return 200, {"ok": True, "service": "vivijure-local-16gb", "version": version, "engine": "cogvideox"}
+        return 200, {"ok": True, "service": SERVICE, "version": version, "engine": ENGINE}
 
     if method == "POST" and path == "/run":
         payload = (body or {}).get("input", body or {})
         if (body or {}).get("selftest") or payload.get("selftest"):
-            return 200, {"ok": True, "selftest": True, "engine": "cogvideox"}  # no-GPU probe stays open
+            return 200, {"ok": True, "selftest": True, "engine": ENGINE}  # no-GPU probe stays open
         err = token_error(token, expected_token)  # i2v touches the GPU -> token required
         if err:
             return err
@@ -107,9 +112,10 @@ def route(
 # --------------------------------------------------------------------------- the i2v run_fn (GPU side)
 
 def build_i2v_run_fn(store, *, workdir: Path | None = None) -> Callable[[dict, Callable[[], bool]], dict]:
-    """Build the registry's worker function: fetch the keyframe from R2, animate it with CogVideoX, upload the
-    clip, return a pointer-only result (the clip_key), mirroring vivijure-backend's run_i2v_clip_job.
-    `store` is an R2-like object (get_file / put_file); injected so this tests with a fake store.
+    """Build the registry's worker function: fetch the keyframe from R2, animate it with the door's
+    engine, upload the clip, return a pointer-only result (the clip_key), mirroring vivijure-backend's
+    run_i2v_clip_job. `store` is an R2-like object (get_file / put_file); injected so this tests with a
+    fake store.
 
     The returned fn takes (payload, should_cancel). should_cancel is threaded into the engine's progress
     callback so a /cancel aborts between denoise steps (a torch step is not externally interruptible)."""
@@ -117,8 +123,7 @@ def build_i2v_run_fn(store, *, workdir: Path | None = None) -> Callable[[dict, C
     announced = {"weights": False}  # heads-up the operator once, on the first (cold) job
 
     def run(payload: dict, should_cancel: Callable[[], bool]) -> dict:
-        from . import i2v_cogvideox
-        from .config import I2VConfig, QualityTier
+        from ..config import I2VConfig, QualityTier
 
         req = I2VClipRequest.from_input(payload)
         reason = req.validate()
@@ -155,7 +160,7 @@ def build_i2v_run_fn(store, *, workdir: Path | None = None) -> Callable[[dict, C
                     raise Cancelled()
 
             out_path = job_dir / "out.mp4"
-            result = i2v_cogvideox.animate(req.shot_id, local_kf, req.prompt, cfg, out_path, progress_cb=progress_cb)
+            result = animate(req.shot_id, local_kf, req.prompt, cfg, out_path, progress_cb=progress_cb)
 
             clip_key = clip_key_for(req.project, req.shot_id)
             store.put_file(result.path, clip_key, content_type="video/mp4")
@@ -228,7 +233,7 @@ def preflight_r2_or_exit(logger=None, *, sleep_s: float = 30.0) -> None:
     line = "=" * 68
     log("\n".join([
         "", line,
-        "  vivijure-local-16gb: your R2 credentials are not set yet.",
+        f"  {SERVICE}: your R2 credentials are not set yet.",
         "",
         "  This backend shares your Vivijure studio's Cloudflare R2 bucket -- it reads",
         "  the keyframe and writes the finished clip there. It is the ONE thing you must",
@@ -249,8 +254,8 @@ def preflight_r2_or_exit(logger=None, *, sleep_s: float = 30.0) -> None:
 
 
 def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
-    """Wire R2 + the CogVideoX engine + the registry and serve. The store + registry build BEFORE the socket
-    binds so a misconfig fails loud at startup, not mid-render."""
+    """Wire R2 + the door's engine + the registry and serve. The store + registry build BEFORE the
+    socket binds so a misconfig fails loud at startup, not mid-render."""
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     from .r2 import R2, R2Config  # deferred: boto3 lives only in the GPU runtime image
@@ -297,7 +302,7 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
             pass
 
     httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f"vivijure-local-16gb serving on {host}:{port} (engine=cogvideox)", flush=True)
+    print(f"{SERVICE} serving on {host}:{port} (engine={ENGINE})", flush=True)
     try:
         httpd.serve_forever()
     finally:

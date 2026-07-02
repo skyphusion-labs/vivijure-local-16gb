@@ -1,4 +1,4 @@
-"""The VRAM cap knob for the CogVideoX door (pure math).
+"""The VRAM cap knob for a local-gpu door (pure math).
 
 `VIVIJURE_MAX_VRAM_GB` lets a homelabber sharing one card BOUND how much VRAM this process claims. The
 parse + fraction math here is PURE (no torch, no CUDA) so it unit-tests on a CPU box; the single torch
@@ -6,10 +6,11 @@ call that enforces it (`torch.cuda.set_per_process_memory_fraction`) lives at se
 (`server.apply_vram_cap`), applied BEFORE any model load.
 
 The card FIT itself is not estimated here: the tier table in `config.py` ships only configs PROVEN on
-real silicon (docs/proof/RESULTS.md: the 16GB floor -- the 49-frame tiers fit a ~15GB PyTorch budget
-and OOM at 13GB), and every request is clamped to those tier ceilings. (A scaffold-era pre-load VRAM
-estimator used to live in this module; it was never wired into the server, so it was removed rather
-than keep advertising a safety check that never ran.)
+real silicon at this door's VRAM budget (docs/proof/RESULTS.md), and every request is clamped to those
+tier ceilings. (A scaffold-era pre-load VRAM estimator used to live in this module; it was never wired
+into the server, so it was removed rather than keep advertising a safety check that never ran.)
+
+Part of the byte-identical `vivijure_local.core` package shared with the sibling door.
 """
 from __future__ import annotations
 

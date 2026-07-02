@@ -74,28 +74,35 @@ rather than polling a dead job forever.
 
 | Module | Role |
 |---|---|
-| `contract.py` | the i2v_clip job I/O + the shared R2 key conventions (identical to the datacenter backend's) |
+| `core/contract.py` | the i2v_clip job I/O + the shared R2 key conventions (identical to the datacenter backend's) |
 | `config.py` | the honest tier->engine mapping (`draft`/`standard`/`final` -> CogVideoX configs; tiers differ by steps, not resolution) |
-| `vram.py` | a pure, conservative VRAM budgeter: does a config fit the card, and which offload it needs |
+| `door.py` | the per-door identity + engine binding (`SERVICE`, `ENGINE`, `WEIGHTS_NOTE`, `animate`) -- the only seam `core` reads |
+| `core/vram.py` | a pure, conservative VRAM budgeter: does a config fit the card, and which offload it needs |
 | `i2v_cogvideox.py` | the CogVideoX engine: pure frame/dimension math (4k+1, /16) + the deferred-torch `animate` body |
-| `jobs.py` | the in-process async job registry (the RunPod-lifecycle stand-in) |
-| `server.py` | the RunPod-compatible HTTP server (pure `route()` + a stdlib http shell) + the i2v run_fn |
-| `r2.py` | minimal shared-bucket object I/O (the one credential the backend holds) |
+| `core/jobs.py` | the in-process async job registry (the RunPod-lifecycle stand-in) |
+| `core/server.py` | the RunPod-compatible HTTP server (pure `route()` + a stdlib http shell) + the i2v run_fn |
+| `core/r2.py` | minimal shared-bucket object I/O (the one credential the backend holds) |
 
-## Shared core with the sibling door (vivijure_local_core -- staged)
+## Shared core with the sibling door (vivijure_local.core -- extracted)
 
 This door and its sibling (`vivijure-local-12gb`, LTX-Video / `vivijure-local-16gb`, CogVideoX) are
-~90% the same code: `r2.py` and `contract.py` are byte-identical, `jobs.py` differs by a couple of
-lines, and `server.py` is ~90% shared. Only `config.py` (the per-model tier table) and the `animate()`
-pipeline binding genuinely differ -- and they SHOULD; that is the honest per-model part.
+~90% the same code. That shared surface now lives in the `vivijure_local.core` package, kept
+BYTE-IDENTICAL across both repos: `r2`, `contract`, `jobs`, the pure `vram` math, the `announce` ready
+banner, and the RunPod-compatible `server` scaffold. Each door keeps ONLY its own `config.py` tier
+table, its engine module (`i2v_ltx` / `i2v_cogvideox`), and a tiny `door.py` identity + binding
+(`SERVICE`, `ENGINE`, `WEIGHTS_NOTE`, `animate`) that the core reads through the stable `..door` /
+`..config` seam. That is the honest per-model part; everything else is shared.
 
-DECIDED (S5): the two doors converge on a shared `vivijure_local_core` package holding the identical
-surface (`r2`, `contract`, `jobs`, `vram`, `announce`, the `server` scaffold, and the engine's pure
-frame/dimension helpers + the pipeline-cache / offload plumbing); each door keeps ONLY its `config.py`
-tier table, its `animate()` pipeline-class binding, and its identity. The EXTRACTION is parked as
-next-sprint work (it is NOT done here); the PATTERN is decided now so a THIRD door does not fork blind
-and re-triple the drift. Until the extraction lands, a change to a shared-surface file MUST be mirrored
-to the sibling door in the same sprint.
+DONE (S6, extraction): the `core/` package replaced the duplicated top-level modules. The two copies are
+proven identical in each PR by `diff -r` of the two `core/` trees (only `door.py` + `config.py` + the
+engine module differ between the repos, as they should). A change to any core file MUST be mirrored to
+the sibling door in the same change and the byte-identical invariant re-checked.
+
+Promoting `core` to a TRUE single source (its own repo, or a git submodule both doors vendor) is now a
+trivial later lift -- the package is already self-contained and seam-clean. It was deliberately NOT done
+now: a new repo would trigger the full new-repo governance standard mid-sprint, and the vendored-copy
+form (like the studio's `src/modules/types.ts` contract) already closes the drift with a mechanical
+`diff` gate. This closes out the earlier new-repo-vs-vendored question: vendored, for now.
 
 ## The CPU / GPU split (testing)
 

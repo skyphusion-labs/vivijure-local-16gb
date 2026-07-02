@@ -1,5 +1,5 @@
 """The VRAM cap knob (pure math; no torch, no CUDA)."""
-from vivijure_local import vram
+from vivijure_local.core import vram
 
 
 def test_parse_max_vram_gb_reads_a_positive_number():

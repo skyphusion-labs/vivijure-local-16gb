@@ -45,7 +45,7 @@ services:
           export LOCAL_BACKEND_TOKEN=$$(python3 -c "import secrets; print(secrets.token_hex(24))");
         fi;
         mkdir -p /shared; printf "%s" "$$LOCAL_BACKEND_TOKEN" > /shared/token;
-        exec python3 -m vivijure_local.server
+        exec python3 -m vivijure_local.core.server
     deploy:
       resources:
         reservations:
@@ -100,7 +100,7 @@ services:
       ANNOUNCE_BACKEND: "http://vivijure-local-16gb:8000"
     volumes:
       - vivijure_runtime:/shared
-    command: ["python3", "-m", "vivijure_local.announce"]
+    command: ["python3", "-m", "vivijure_local.core.announce"]
 
 volumes:
   vivijure_models:
