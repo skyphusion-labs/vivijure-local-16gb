@@ -71,6 +71,29 @@ Out-of-scope:
   load as `safetensors` (no code execution on load; pin the model revision); supply-chain risk in the
   weights or libraries is upstream (report it to those projects), beyond how this backend invokes them.
 
+## Known dependency advisories (pinned ML stack -- deferred, with rationale)
+
+Dependabot reports open advisories against the pinned `transformers==4.46.3` and `diffusers==0.32.2`
+(the sibling door pins the same set). These pins are DELIBERATE: they are the exact `torch 2.4.1` line
+validated in the container proof (`docs/proof/RESULTS.md`). `diffusers` 0.38+ requires a newer `torch`
+and breaks on 2.4, so a bump is not a free merge -- it forces a full re-proof on real silicon.
+
+These bumps are DEFERRED (an S5 decision), because none is reachable in this backend's threat model:
+
+- Every high-severity advisory is an UNTRUSTED-ARTIFACT-LOAD bug: remote code execution, a
+  `trust_remote_code` bypass, or deserialization of an untrusted model file. This backend loads ONLY a
+  PINNED model id (`THUDM/CogVideoX-5b-I2V`), never a user-supplied model or pipeline, and NEVER sets
+  `trust_remote_code`. There is no path for a caller to point it at a malicious artifact.
+- The only caller-controlled inputs are `prompt` / `negative_prompt`, which are TOKENIZER STRING input,
+  not artifact deserialization -- they do not reach the vulnerable code paths.
+- The endpoint is token-gated and tunnel-only (see Scope above), not a public multi-tenant surface.
+
+The re-pin is SCHEDULED, not dropped: Phase B (the higher-fidelity model tier) forces a newer
+`diffusers`, so the whole stack is re-proved and re-pinned there. This note is the paper trail for the
+deferral -- a degrade is never silent. If you find a NEW advisory that IS reachable here (for example,
+one triggerable through `prompt` text into the tokenizer), report it via the channel above; that flips
+the deferral to an immediate re-pin.
+
 ## Acceptable use
 
 Vivijure is self-hosted software: you run this backend on your own hardware, in your own jurisdiction, and you are the operator responsible for using it lawfully and for whatever is generated on your machine. Skyphusion Labs ships the software and operates no instance of it, so it does not and architecturally cannot monitor what you generate. Misuse is therefore an acceptable-use matter, not a security vulnerability -- do not report generated content through the security channel.

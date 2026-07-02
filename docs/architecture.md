@@ -82,6 +82,21 @@ rather than polling a dead job forever.
 | `server.py` | the RunPod-compatible HTTP server (pure `route()` + a stdlib http shell) + the i2v run_fn |
 | `r2.py` | minimal shared-bucket object I/O (the one credential the backend holds) |
 
+## Shared core with the sibling door (vivijure_local_core -- staged)
+
+This door and its sibling (`vivijure-local-12gb`, LTX-Video / `vivijure-local-16gb`, CogVideoX) are
+~90% the same code: `r2.py` and `contract.py` are byte-identical, `jobs.py` differs by a couple of
+lines, and `server.py` is ~90% shared. Only `config.py` (the per-model tier table) and the `animate()`
+pipeline binding genuinely differ -- and they SHOULD; that is the honest per-model part.
+
+DECIDED (S5): the two doors converge on a shared `vivijure_local_core` package holding the identical
+surface (`r2`, `contract`, `jobs`, `vram`, `announce`, the `server` scaffold, and the engine's pure
+frame/dimension helpers + the pipeline-cache / offload plumbing); each door keeps ONLY its `config.py`
+tier table, its `animate()` pipeline-class binding, and its identity. The EXTRACTION is parked as
+next-sprint work (it is NOT done here); the PATTERN is decided now so a THIRD door does not fork blind
+and re-triple the drift. Until the extraction lands, a change to a shared-surface file MUST be mirrored
+to the sibling door in the same sprint.
+
 ## The CPU / GPU split (testing)
 
 Exactly like vivijure-backend + the LTX door: everything CPU-testable is pure and unit-tested (config,
