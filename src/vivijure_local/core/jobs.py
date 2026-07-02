@@ -5,7 +5,7 @@ The local box has no such platform, so this registry IS that lifecycle -- it acc
 a background worker thread, and exposes RunPod-COMPATIBLE status (IN_QUEUE / IN_PROGRESS / COMPLETED /
 FAILED) so the local-gpu module's poll loop is a near-clone of own-gpu's.
 
-A consumer card runs ONE job at a time (a 16GB card cannot fit two i2v pipelines), so the registry is a
+A consumer card runs ONE job at a time (a consumer GPU cannot fit two i2v pipelines), so the registry is a
 single-worker serial queue: extra submits wait IN_QUEUE. Cancel is best-effort + cooperative: a queued
 job is dropped immediately; a running job is flagged so the engine's progress callback can raise and
 abort between denoise steps (a torch step is not externally interruptible, so we cancel at the next

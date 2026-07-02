@@ -2,7 +2,7 @@
 import threading
 import time
 
-from vivijure_local.jobs import Cancelled, JobRegistry, JobStatus
+from vivijure_local.core.jobs import Cancelled, JobRegistry, JobStatus
 
 
 def _wait_for(registry, job_id, status, timeout=3.0):

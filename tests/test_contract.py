@@ -1,7 +1,7 @@
 """The door's R2-key slug MUST match vivijure-backend's keys._slug exactly, or a keyframe the studio
 wrote under one slug spelling 404s when this door looks under another. These are the cases that used to
 diverge (double space, tabs, leading/trailing whitespace, empty)."""
-from vivijure_local.contract import _safe, clip_key_for, keyframe_key_for
+from vivijure_local.core.contract import _safe, clip_key_for, keyframe_key_for
 
 
 def test_safe_matches_backend_slug_on_the_cases_that_used_to_diverge():
