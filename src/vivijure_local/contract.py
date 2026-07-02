@@ -60,4 +60,8 @@ def clip_key_for(project: str, shot_id: str) -> str:
 
 
 def _safe(s: str) -> str:
-    return (s or "x").replace("/", "_").replace(" ", "_")
+    """Reduce a name to the SAME R2-safe path segment as the datacenter backend keys._slug
+    (vivijure-backend), so a project never scatters across two slug spellings of its own name. A
+    divergence here is a keyframe 404: the studio wrote 'My_Film' but this door looked under
+    'My__Film'. Mirror _slug exactly: strip, collapse ANY whitespace run to one '_', then '/' -> '_'."""
+    return "_".join(str(s).strip().split()).replace("/", "_") or "untitled"
