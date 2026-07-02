@@ -45,7 +45,7 @@ the matching doc.
 - `docs/proof/RESULTS.md` -- the validated fit/speed numbers (POPULATED by Milestone 2; pending until then).
 - `docs/RUN-LOG.md` -- the running build/validation log.
 
-## The job API (RunPod-compatible, `src/vivijure_local/server.py`)
+## The job API (RunPod-compatible, `src/vivijure_local/core/server.py`)
 
 ```
 POST /run          { "input": { action:"i2v_clip", project, shot_id, prompt, keyframe_key?, config } } -> { "id" }
@@ -97,10 +97,10 @@ run the benchmark on a RunPod COMMUNITY pod (secure cloud only; a hard rule).
 
 ## Architecture
 
-- **One server, serial registry.** `server.py` is a long-running process with an in-process job
+- **One server, serial registry.** `core/server.py` is a long-running process with an in-process job
   registry; a consumer card runs one i2v job at a time. The engine is `i2v_cogvideox.py`;
-  transport/contract helpers are `contract.py` / `r2.py`; VRAM + config math are `vram.py` / `config.py`;
-  the docker-compose `ready` banner is `announce.py`.
+  transport/contract helpers are `core/contract.py` / `core/r2.py`; VRAM math is `core/vram.py`; the tier config is `config.py` (per-door);
+  the docker-compose `ready` banner is `core/announce.py`. The shared surface (`r2` / `contract` / `jobs` / `vram` / `announce` / `server`) lives in the byte-identical `vivijure_local.core` package; `door.py` is the per-door identity + engine seam (see docs/architecture.md).
 - **One-command, secure-by-default deploy.** `docker compose up` brings up the backend + a Cloudflare
   tunnel + a `ready` banner that prints the copy-paste Backend URL + token. Default is a TryCloudflare
   QUICK tunnel (no CF account); set `TUNNEL_TOKEN` for a stable named tunnel.

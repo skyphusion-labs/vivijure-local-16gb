@@ -7,8 +7,8 @@ route (i2v /run, /status, /cancel) REQUIRES a valid LOCAL_BACKEND_TOKEN -- an un
 import time
 from pathlib import Path
 
-from vivijure_local.jobs import JobRegistry
-from vivijure_local.server import apply_vram_cap, build_i2v_run_fn, route, token_error
+from vivijure_local.core.jobs import JobRegistry
+from vivijure_local.core.server import apply_vram_cap, build_i2v_run_fn, route, token_error
 
 TOK = "s3cret-token"
 
@@ -153,7 +153,7 @@ def test_preflight_r2_passes_when_all_present(monkeypatch):
     for k in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"):
         monkeypatch.setenv(k, "x")
     logs = []
-    from vivijure_local.server import preflight_r2_or_exit
+    from vivijure_local.core.server import preflight_r2_or_exit
     preflight_r2_or_exit(logger=logs.append, sleep_s=0)  # returns None, does not raise
     assert logs == []
 
@@ -165,7 +165,7 @@ def test_preflight_r2_exits_with_plain_message_when_missing(monkeypatch):
     for k in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"):
         monkeypatch.delenv(k, raising=False)
     logs = []
-    from vivijure_local.server import preflight_r2_or_exit
+    from vivijure_local.core.server import preflight_r2_or_exit
     with pytest.raises(SystemExit) as ei:
         preflight_r2_or_exit(logger=logs.append, sleep_s=0)
     assert ei.value.code == 1
