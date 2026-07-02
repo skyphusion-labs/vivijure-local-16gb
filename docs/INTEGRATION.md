@@ -30,6 +30,31 @@ the module moves no bytes.
 Auth: if `LOCAL_BACKEND_TOKEN` is set, the module sends it as `Authorization: Bearer <token>` and the
 server enforces it; unset = open (trusted-LAN tunnel only).
 
+## Progress and status semantics (poll-only)
+
+There is **no sub-step progress channel**. `GET /status/<id>` returns only the RunPod-compatible
+`IN_QUEUE | IN_PROGRESS | COMPLETED | FAILED` envelope -- deliberately identical to the datacenter
+(own-gpu) door, so the `local-gpu` module's poll loop is unchanged. There is no percentage and no
+per-denoise-step event; the module polls until the status is terminal.
+
+One consequence to plan for: **`IN_PROGRESS` covers the first-render weights load, not just the
+denoise.** The first job on a freshly started (cold) box loads the model into VRAM before any denoise
+step runs, and a box that has never pulled the model downloads several GB of weights first. During that
+window `/status` reads `IN_PROGRESS` with no output for **several minutes** -- indistinguishable from a
+hang from the poll side alone.
+
+Two things make it legible:
+
+- **Server logs.** The backend prints a one-time heads-up on the first job (`vivijure-local: first i2v
+  job on this process -- the model weights load now ...`). An operator tailing the container logs sees
+  the cold load is progressing, not stuck.
+- **The warm model.** After the first job the model stays loaded for the life of the process, so every
+  subsequent clip skips the load and goes straight to denoise.
+
+If the studio wants a richer progress signal later (e.g. an R2 NDJSON event stream the planner tails),
+that is an additive, cross-repo change -- it is intentionally NOT built here, because the door's job is
+to match the datacenter contract, and the datacenter door is poll-only too.
+
 ## The flip checklist (studio side)
 
 STATE (as of studio v0.7.7): `local-gpu` is currently **EXCLUDED** from the studio CI deploy (Strummer's
