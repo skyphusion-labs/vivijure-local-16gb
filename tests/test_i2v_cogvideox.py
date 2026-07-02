@@ -54,3 +54,86 @@ def test_animate_raises_without_torch_rather_than_faking_output():
             eng.animate("shot_01", __file__, "a slow dolly in", cfg, "/tmp/none.mp4")
     else:
         pytest.skip("torch+diffusers present; the deferred-import guard cannot be exercised here")
+
+
+# --------------------------------------------------------------------------- pipeline cache (process-lifetime)
+
+def _fake_torch(cuda_available: bool, emptied: list | None = None):
+    class _Cuda:
+        @staticmethod
+        def is_available():
+            return cuda_available
+
+        @staticmethod
+        def empty_cache():
+            if emptied is not None:
+                emptied.append(True)
+
+    class _Torch:
+        bfloat16 = "bf16"
+        cuda = _Cuda
+
+    return _Torch
+
+
+class _FakeCls:
+    """A stand-in pipeline class: from_pretrained records each build and returns a bare object (so
+    _apply_offload's best-effort hooks are all no-ops), no torch/diffusers needed."""
+
+    def __init__(self):
+        self.builds = []
+
+    def from_pretrained(self, model, torch_dtype=None):
+        self.builds.append((model, torch_dtype))
+        return object()
+
+
+def test_get_pipe_builds_once_and_reuses_per_key():
+    eng._PIPE_CACHE.clear()
+    cfg = I2VConfig.from_request({"quality": "draft"}, tier=QualityTier.DRAFT)
+    cls = _FakeCls()
+    torch = _fake_torch(cuda_available=False)
+
+    p1 = eng._get_pipe(cfg, cls, torch)
+    p2 = eng._get_pipe(cfg, cls, torch)
+
+    assert p1 is p2                  # the warm box reuses the resident pipe
+    assert len(cls.builds) == 1      # from_pretrained ran exactly once (the ~30s weights read)
+    eng._PIPE_CACHE.clear()
+
+
+def test_pipe_cache_key_separates_offload_and_tiling():
+    import dataclasses
+
+    from vivijure_local.config import Offload
+
+    cfg = I2VConfig.from_request({"quality": "draft"}, tier=QualityTier.DRAFT)
+    seq = dataclasses.replace(cfg, offload=Offload.SEQUENTIAL_CPU_OFFLOAD)
+    no_tile = dataclasses.replace(cfg, vae_tiling=False)
+
+    assert eng._pipe_cache_key(cfg) != eng._pipe_cache_key(seq)
+    assert eng._pipe_cache_key(cfg) != eng._pipe_cache_key(no_tile)
+
+
+def test_evict_pipe_drops_the_entry_and_frees_vram():
+    eng._PIPE_CACHE.clear()
+    cfg = I2VConfig.from_request({"quality": "draft"}, tier=QualityTier.DRAFT)
+    emptied: list = []
+    torch = _fake_torch(cuda_available=True, emptied=emptied)
+
+    eng._get_pipe(cfg, _FakeCls(), torch)
+    assert eng._PIPE_CACHE           # cached after a build
+
+    eng._evict_pipe(cfg, torch)
+    assert not eng._PIPE_CACHE        # entry gone -> next job rebuilds fresh
+    assert emptied == [True]                    # VRAM freed explicitly, not left to GC timing
+
+
+def test_evict_pipe_skips_empty_cache_when_no_cuda():
+    eng._PIPE_CACHE.clear()
+    cfg = I2VConfig.from_request({"quality": "draft"}, tier=QualityTier.DRAFT)
+    emptied: list = []
+    torch = _fake_torch(cuda_available=False, emptied=emptied)
+
+    eng._evict_pipe(cfg, torch)       # CPU box: no CUDA to empty
+    assert emptied == []
