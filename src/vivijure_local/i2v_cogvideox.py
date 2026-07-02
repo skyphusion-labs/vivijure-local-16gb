@@ -21,6 +21,7 @@ config.py -- not a bug in the scaffold.
 """
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -219,20 +220,34 @@ def _apply_offload(pipe, cfg: I2VConfig) -> None:
                 except Exception:
                     pass
     if cfg.offload is Offload.SEQUENTIAL_CPU_OFFLOAD:
-        _try(pipe, "enable_sequential_cpu_offload")
+        applied = _try(pipe, "enable_sequential_cpu_offload")
     elif cfg.offload is Offload.MODEL_CPU_OFFLOAD:
-        _try(pipe, "enable_model_cpu_offload")
+        applied = _try(pipe, "enable_model_cpu_offload")
     else:
-        _try(pipe, "to", "cuda")
+        applied = _try(pipe, "to", "cuda")
+    if not applied:
+        _log(f"offload strategy {cfg.offload.value!r} did not apply (hook absent or raised) -- the run may OOM on a consumer card")
 
 
-def _try(obj, name: str, *args) -> None:
+def _log(msg: str) -> None:
+    """Operator-facing log to stderr (the box tails its own logs; stdout stays clean for the server)."""
+    print(f"vivijure-local: {msg}", file=sys.stderr, flush=True)
+
+
+def _try(obj, name: str, *args) -> bool:
+    """Call obj.name(*args) when present. Returns True if it ran cleanly. A present hook that RAISES is
+    logged loudly -- offload IS the consumer-VRAM fit, so a swallowed failure would surface only as an
+    OOM blamed on the model; an ABSENT hook returns False quietly (an expected diffusers-build
+    difference, reported once by the caller when it means no offload applied at all)."""
     hook = getattr(obj, name, None)
-    if callable(hook):
-        try:
-            hook(*args)
-        except Exception:
-            pass
+    if not callable(hook):
+        return False
+    try:
+        hook(*args)
+        return True
+    except Exception as e:  # noqa: BLE001
+        _log(f"offload/vram hook {name!r} raised: {e} -- VRAM headroom at risk")
+        return False
 
 
 def _step_callback(progress_cb, total: int):

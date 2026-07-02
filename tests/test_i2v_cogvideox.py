@@ -137,3 +137,36 @@ def test_evict_pipe_skips_empty_cache_when_no_cuda():
 
     eng._evict_pipe(cfg, torch)       # CPU box: no CUDA to empty
     assert emptied == []
+# --------------------------------------------------------------------------- offload-failure logging
+
+def test_try_returns_true_on_clean_hook_and_false_on_absent():
+    calls = []
+
+    class Obj:
+        def hook(self, *a):
+            calls.append(a)
+
+    assert eng._try(Obj(), "hook") is True
+    assert calls == [()]
+    assert eng._try(Obj(), "nope") is False   # absent hook -> quietly False
+
+
+def test_try_logs_loudly_and_returns_false_when_a_present_hook_raises(capsys):
+    class Boom:
+        def hook(self):
+            raise RuntimeError("no cuda here")
+
+    assert eng._try(Boom(), "hook") is False
+    err = capsys.readouterr().err
+    assert "hook" in err and "VRAM" in err        # the swallowed failure is now surfaced
+
+
+def test_apply_offload_warns_when_the_strategy_does_not_apply(capsys):
+    cfg = I2VConfig.from_request({"quality": "draft"}, tier=QualityTier.DRAFT)
+
+    class BarePipe:  # no offload hooks at all (a wrong/old diffusers build)
+        pass
+
+    eng._apply_offload(BarePipe(), cfg)
+    err = capsys.readouterr().err
+    assert "did not apply" in err                 # offload is the fit; silence would mask an OOM

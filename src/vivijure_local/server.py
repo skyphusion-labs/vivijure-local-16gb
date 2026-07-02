@@ -15,6 +15,7 @@ engine are wired in `build_i2v_run_fn` and injected, so the server module stays 
 """
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import re
@@ -22,6 +23,7 @@ import tempfile
 from pathlib import Path
 from typing import Callable
 
+from . import __version__
 from .contract import I2VClipRequest, clip_key_for, keyframe_key_for
 from .jobs import Cancelled, JobRegistry, JobStatus
 
@@ -39,7 +41,7 @@ def token_error(headers_token: str | None, expected: str) -> tuple[int, dict] | 
     stay open for liveness; everything that can touch the GPU is gated."""
     if not expected:
         return 503, {"ok": False, "error": "LOCAL_BACKEND_TOKEN not configured: refusing to serve an open i2v endpoint (the tunnel is public)"}
-    if not headers_token or headers_token != expected:
+    if not headers_token or not hmac.compare_digest(headers_token, expected):
         return 401, {"ok": False, "error": "unauthorized"}
     return None
 
@@ -52,7 +54,7 @@ def route(
     registry: JobRegistry,
     token: str | None,
     expected_token: str,
-    version: str = "0.1.0",
+    version: str = __version__,
 ) -> tuple[int, dict]:
     """Pure request dispatcher: (method, path, parsed-body) -> (http_status, json_dict). No sockets, no
     I/O of its own (the registry's run_fn does the work on its worker thread), so it unit-tests
