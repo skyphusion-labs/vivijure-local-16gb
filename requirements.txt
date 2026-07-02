@@ -1,3 +1,8 @@
+# NOTE (S6): the non-ML runtime deps below are pinned to EXACT versions (their declared,
+# tested-with floors) for reproducible builds -- not bumped. The ML pins (diffusers /
+# transformers on torch 2.4.1) stay deferred; see SECURITY.md for the reachability paper trail
+# and the Phase B re-proof that will replace these floor-pins with a captured pip-freeze lockfile.
+
 # vivijure-local-16gb runtime stack (the CogVideoX consumer door). CogVideoX-5B-I2V image-to-video
 # on a single consumer card, plus R2 object I/O. torch/torchvision are installed from the CUDA index in
 # deploy/Dockerfile (matched to the card's CUDA line). diffusers/transformers are PINNED to the exact
@@ -13,12 +18,12 @@
 # --- CogVideoX-5B-I2V engine (HuggingFace diffusers) ---
 diffusers==0.32.2          # CogVideoXImageToVideoPipeline present here; validated on torch 2.4.1; 0.38+ breaks on 2.4
 transformers==4.46.3       # the transformers line validated with diffusers 0.32.2 on torch 2.4
-accelerate>=0.34.0         # enable_model_cpu_offload / enable_sequential_cpu_offload (the consumer-VRAM savers)
-safetensors>=0.4.5
-sentencepiece>=0.2.0       # CogVideoX T5-XXL text encoder tokenizer
-imageio>=2.37.3
-imageio-ffmpeg>=0.6.0      # export_to_video
-av>=17.1.0                 # frame-accurate clip write
+accelerate==0.34.0         # enable_model_cpu_offload / enable_sequential_cpu_offload (the consumer-VRAM savers)
+safetensors==0.4.5
+sentencepiece==0.2.0       # CogVideoX T5-XXL text encoder tokenizer
+imageio==2.37.3
+imageio-ffmpeg==0.6.0      # export_to_video
+av==17.1.0                 # frame-accurate clip write
 
 # --- object storage (shared vivijure R2 bucket) ---
-boto3>=1.43.38
+boto3==1.43.38
