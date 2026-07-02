@@ -78,21 +78,35 @@ Dependabot reports open advisories against the pinned `transformers==4.46.3` and
 validated in the container proof (`docs/proof/RESULTS.md`). `diffusers` 0.38+ requires a newer `torch`
 and breaks on 2.4, so a bump is not a free merge -- it forces a full re-proof on real silicon.
 
-These bumps are DEFERRED (an S5 decision), because none is reachable in this backend's threat model:
+Current open advisories (re-verified in S6) and why each is UNREACHABLE in this backend's threat model:
 
-- Every high-severity advisory is an UNTRUSTED-ARTIFACT-LOAD bug: remote code execution, a
-  `trust_remote_code` bypass, or deserialization of an untrusted model file. This backend loads ONLY a
-  PINNED model id (`THUDM/CogVideoX-5b-I2V`), never a user-supplied model or pipeline, and NEVER sets
-  `trust_remote_code`. There is no path for a caller to point it at a malicious artifact.
-- The only caller-controlled inputs are `prompt` / `negative_prompt`, which are TOKENIZER STRING input,
-  not artifact deserialization -- they do not reach the vulnerable code paths.
+- HIGH -- untrusted-artifact-load: `transformers` remote code execution, the `diffusers`
+  `trust_remote_code` / `custom_pipeline` bypass (including a TOCTOU variant), and `transformers`
+  deserialization of untrusted data. This backend loads ONLY a PINNED model id (`THUDM/CogVideoX-5b-I2V`), never a
+  user-supplied model / pipeline / config, and NEVER sets `trust_remote_code`. There is no path for a
+  caller to point it at a malicious artifact, so none of these is reachable.
+- MEDIUM / LOW -- `transformers` ReDoS: the reported regex-DoS advisories are in `MarianTokenizer`,
+  `DonutProcessor`, `get_imports`, and `get_configuration_file`. None is on this backend's prompt path:
+  the only caller-controlled strings are `prompt` / `negative_prompt`, which go through the pinned
+  model's T5 / CLIP tokenizer (not Marian / Donut), while `get_imports` / `get_configuration_file` run
+  during `from_pretrained` on the PINNED model id, never on attacker-influenced input. So there is no
+  caller-reachable ReDoS.
 - The endpoint is token-gated and tunnel-only (see Scope above), not a public multi-tenant surface.
 
-The re-pin is SCHEDULED, not dropped: Phase B (the higher-fidelity model tier) forces a newer
-`diffusers`, so the whole stack is re-proved and re-pinned there. This note is the paper trail for the
-deferral -- a degrade is never silent. If you find a NEW advisory that IS reachable here (for example,
-one triggerable through `prompt` text into the tokenizer), report it via the channel above; that flips
-the deferral to an immediate re-pin.
+These bumps stay DEFERRED (the S5 decision, re-verified in S6): none is reachable. The re-pin is
+SCHEDULED, not dropped -- Phase B (the higher-fidelity model tier) forces a newer `diffusers`, so the
+whole ML stack is re-proved and re-pinned there. Phase B's GPU re-proof PIGGYBACKS the parked
+install / re-ratification pod round: when Conrad reopens that round, the stack is re-proved on real
+silicon and these pins move in the same pass. That is a concrete trigger, not a vague "later". This
+note is the paper trail -- a degrade is never silent. If you find a NEW advisory that IS reachable here
+(for example, one triggerable through `prompt` text into the pinned model's tokenizer), report it via
+the channel above; that flips the deferral to an immediate re-pin.
+
+The non-ML runtime deps (`accelerate`, `safetensors`, `sentencepiece`, `imageio`, `imageio-ffmpeg`,
+`av`, `boto3`) are now pinned to exact versions -- their declared, tested-with floors -- for reproducible
+builds (the specific floors such as `imageio` 2.37.3 / `av` 17.1.0 / `boto3` 1.43.38 are the versions
+present at authoring / proof, not arbitrary minimums). A captured `pip freeze` lockfile will replace the
+floor-pins at the same Phase B pod re-proof, when a real build is available to freeze.
 
 ## Acceptable use
 
