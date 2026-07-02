@@ -173,3 +173,32 @@ def test_preflight_r2_exits_with_plain_message_when_missing(monkeypatch):
     assert "R2 credentials are not set" in blob
     assert "docker compose up" in blob            # actionable next step
     assert "R2_ACCOUNT_ID" in blob                # names which var is missing (not its value)
+
+
+def test_first_job_announces_the_weights_load_once(monkeypatch, tmp_path, capsys):
+    # The cold-box weights load is invisible on /status (IN_PROGRESS the whole time); the backend must
+    # say so, once, so an operator can tell a several-minute load from a hang.
+    class FakeStore:
+        def get_file(self, key, dest):
+            Path(dest).write_bytes(b"png")
+            return dest
+
+        def put_file(self, src, key, content_type=None):
+            return key
+
+    import vivijure_local.i2v_cogvideox as eng
+    from vivijure_local.i2v_cogvideox import I2VResult
+
+    def fake_animate(shot_id, keyframe, prompt, cfg, out_path, *, progress_cb=None):
+        Path(out_path).write_bytes(b"mp4")
+        return I2VResult(shot_id=shot_id, path=Path(out_path), num_frames=121, fps=24, seconds=5.04, distilled=False)
+
+    monkeypatch.setattr(eng, "animate", fake_animate)
+
+    run = build_i2v_run_fn(FakeStore(), workdir=tmp_path)
+    payload = {"action": "i2v_clip", "project": "P", "shot_id": "s1", "prompt": "dolly",
+               "config": {"quality": "draft"}}
+    run(payload, lambda: False)
+    run(payload, lambda: False)
+    out = capsys.readouterr().out
+    assert out.count("the model weights load now") == 1   # announced once, not per job
