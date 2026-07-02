@@ -25,7 +25,7 @@ CPU-importable (no torch), exactly like vivijure-backend's config.py.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -79,22 +79,24 @@ class TierConfig:
 
 # The honest CogVideoX ladder. Resolution is held at the model's native 720x480 across ALL tiers (the
 # model degrades off-grid); the tiers differ by STEPS (fidelity) and, for draft, a shorter clip (speed).
-# Offload defaults to model-cpu-offload + VAE tiling/slicing (Milestone 2 confirms whether that fits the
-# target card or whether the low-VRAM tier needs sequential offload). NOT datacenter parity; CogVideoX1.5
+# Offload is model-cpu-offload + VAE tiling/slicing, PROVEN to fit a 16GB card across all three tiers
+# (docs/proof/RESULTS.md; 12GB/14GB cards OOM on the 49-frame tiers). NOT datacenter parity; CogVideoX1.5
 # is the future higher tier.
 _TIERS: dict[QualityTier, TierConfig] = {
     # Fast preview: fewer steps + a shorter clip. Lowest wall-clock (CogVideoX is a full-step model, so
-    # steps dominate runtime).
+    # steps dominate runtime). Measured 97.8s/clip on an RTX 4090 (docs/proof).
     QualityTier.DRAFT: TierConfig(
         model=COGVIDEOX_5B_I2V, steps=30, guidance_scale=6.0,
         width=720, height=480, max_frames=25, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
     ),
-    # The comfortable middle: the full 49-frame clip at a moderate step count.
+    # The comfortable middle: the full 49-frame clip at a moderate step count. Measured 243.0s/clip
+    # on an RTX 4090 (docs/proof).
     QualityTier.STANDARD: TierConfig(
         model=COGVIDEOX_5B_I2V, steps=40, guidance_scale=6.0,
         width=720, height=480, max_frames=49, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
     ),
     # The card's HONEST ceiling: the model-card default 50 steps at the full 49-frame native grid.
+    # Measured 299.2s/clip on an RTX 4090 (docs/proof).
     QualityTier.FINAL: TierConfig(
         model=COGVIDEOX_5B_I2V, steps=50, guidance_scale=6.0,
         width=720, height=480, max_frames=49, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
@@ -159,11 +161,6 @@ class I2VConfig:
             flow_shift=flow_shift, offload=base.offload, vae_tiling=base.vae_tiling,
             negative_prompt=str(cfg.get("negative_prompt") or ""),
         )
-
-    def with_dims(self, width: int, height: int) -> "I2VConfig":
-        """Return a copy following the keyframe's native dims (clamped to the tier ceiling), used when
-        the engine probes the actual keyframe size."""
-        return replace(self, width=min(self.width, width), height=min(self.height, height))
 
 
 def tier_config(tier: QualityTier) -> TierConfig:

@@ -1,20 +1,20 @@
 # Make films on your own GPU (CogVideoX)
 
 Vivijure's motion engine (image-to-video), running on **your** graphics card with **CogVideoX-5B-I2V**,
-the fidelity-first local engine. No cloud, no per-render bill, no account to sign up for. One command
-and you're rendering.
+the fidelity-first local engine. No cloud GPU, no per-render bill. One setup step (your studio's R2
+storage credentials), one command, and you're rendering.
 
-> WORKING NAME / PRE-PROOF: the exact minimum card and per-clip speed are being measured on real
-> silicon (the benchmark, `docs/live-benchmark-plan.md`); this page states the shape honestly and marks
-> the not-yet-measured numbers as such. If you want the fastest local option instead of the highest
+> PROVEN on real silicon: the honest floor is a **16GB card**, and the per-clip speeds below are
+> measured (`docs/proof/RESULTS.md`). If you want the fastest local option instead of the highest
 > fidelity, use the LTX door (vivijure-local-12gb).
 
 ## Quickstart (you'll be rendering in minutes)
 
-You need: an NVIDIA CUDA GPU, **Docker**, and the
+You need: an NVIDIA GPU with **16GB+ VRAM** (the measured floor; 12GB and 14GB cards OOM on the full
+49-frame tiers), an NVIDIA driver **550 or newer**, **Docker**, the
 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
-(one install so the container can see your GPU). CogVideoX-5B needs CPU offload on any consumer card, so
-a mid-to-high VRAM card is recommended; the exact floor is pinned by the benchmark. That's it.
+(one install so the container can see your GPU), and about **35GB of free disk** (container image +
+the ~22GB weights). That's it.
 
 ONE setup step before you start: your Vivijure studio's Cloudflare R2 credentials (this backend shares
 that bucket -- it reads the keyframe and writes the finished clip there). Get them from the Cloudflare
@@ -31,8 +31,8 @@ docker compose up
 (Forgot the R2 creds? The backend prints a plain message telling you exactly what to set -- not a stack
 trace -- and you just run `docker compose up` again.)
 
-That's the whole setup. The stack starts your render backend, opens its own secure tunnel, downloads
-the model once, and then prints a banner like this:
+That's the whole setup. The stack starts your render backend, opens its own secure tunnel, and
+prints a banner like this:
 
 ```
 ================================================================
@@ -48,7 +48,10 @@ the model once, and then prints a banner like this:
 **Copy those two values into your Vivijure studio's "Local (your GPU)" door, pick it, and render.**
 A real clip comes back from your own card. That's it -- you just made a film on your own GPU.
 
-(No tunnel to configure, no account, no networking to understand. The tunnel is built in and invisible;
+One honest heads-up: your **first render** also downloads the CogVideoX weights (~22GB, one time), so
+it takes a good while longer. Later renders skip the download.
+
+(No tunnel to configure, no networking to understand. The tunnel is built in and invisible;
 the URL + token in the banner are all you touch.)
 
 ---
@@ -66,7 +69,7 @@ You ran a **local door** -- rendering on hardware you own. The studio also has a
 |---|---|---|---|
 | Cost | **Free after hardware** (your power) | **Free after hardware** | Pay per render second |
 | Strength | **Fidelity** (best local i2v quality) | **Speed** (few-step, fast) | Max fidelity + length |
-| Speed | slower (full-step; minutes/clip class) | fast (sub-minute class) | fastest (datacenter cards) |
+| Speed | slower (measured ~1.6-5 min/clip) | fast (sub-minute draft; ~2-3 min top tiers) | fastest (datacenter cards) |
 | Ceiling | 720x480, ~6s clips (CogVideoX-5B-I2V) | ~768x512, ~5s (LTX-Video) | higher res / longer (Wan 2.2) |
 | Setup | one command on your box | one command | nothing (it's hosted) |
 
@@ -77,14 +80,14 @@ iteration; pick the datacenter door for maximum fidelity without owning hardware
 
 The studio's three tiers map to CogVideoX settings. CogVideoX-5B-I2V is a fixed-grid model (720x480, up
 to 49 frames @ 8 fps), so the tiers differ by inference **steps** (quality vs speed), not resolution.
-`final` here is the model's honest ceiling on your card, not datacenter parity. **Per-clip speed is
-measured by the benchmark (`docs/live-benchmark-plan.md`); the placeholders below are not yet proven.**
+`final` here is the model's honest ceiling on your card, not datacenter parity. Speeds are measured
+on an RTX 4090 24GB (`docs/proof/RESULTS.md`); a 16GB card runs slower.
 
 | Tier | Resolution | Frames | Steps | Speed feel |
 |---|---|---|---|---|
-| draft | 720x480 | 25 | 30 | fastest preview (TBD) |
-| standard | 720x480 | 49 (~6s) | 40 | the everyday tier (TBD) |
-| final | 720x480 | 49 (~6s) | 50 | best quality, slowest (TBD) |
+| draft | 720x480 | 25 (~3.1s) | 30 | fastest preview (~1.6min/clip) |
+| standard | 720x480 | 49 (~6.1s) | 40 | the everyday tier (~4min/clip) |
+| final | 720x480 | 49 (~6.1s) | 50 | best quality, slowest (~5min/clip) |
 
 ### A stable address (named tunnel)
 
@@ -118,7 +121,8 @@ sequential offload, or raise the cap. The startup log prints the applied cap.
 - **A render fails with out-of-memory:** CogVideoX-5B is heavy; drop to a lower tier (`final` ->
   `standard` -> `draft`). The backend already uses model CPU offload + VAE tiling/slicing to fit a
   consumer card; a marginal card may need sequential offload (slower) or the lighter tier.
-- **First render is slow:** that's the one-time model download populating the cache; later renders reuse it.
+- **First render is slow:** that's the one-time model download (~22GB) populating the cache; expect
+  it to take a good while longer on the first render only. Later renders reuse it.
 - **Studio can't reach it:** re-check the Backend URL + token from the banner
   (`docker compose logs ready`) match what you pasted into the studio.
 

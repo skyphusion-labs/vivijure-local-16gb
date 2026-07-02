@@ -41,8 +41,7 @@ has slightly MORE usable headroom than the raw cap):
 
 **FLOOR = a 16GB card.** The full 49-frame tiers fit a ~15GB PyTorch budget and OOM at 13GB; a 12GB or
 14GB card cannot run standard/final. `draft` (25 frames, ~12.35GB alloc) is lighter and may serve a
-smaller card, but the honest full-experience floor is **16GB**. `FLOOR_VRAM_GB = 16.0` in `vram.py` is
-now the PROVEN value.
+smaller card, but the honest full-experience floor is **16GB** (the proven value).
 
 ## Two independent legs, both green
 

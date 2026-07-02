@@ -1,4 +1,4 @@
-# Live benchmark plan -- Milestone 2 (FLAGGED FOR CONRAD/MACKAYE -- NOT EXECUTED)
+# Live benchmark plan -- Milestone 2 (EXECUTED 2026-07-01; results in `proof/RESULTS.md`)
 
 > Spend gate. Everything else in this repo (research, scaffold, the dry fit analysis, the CPU test
 > suite) needed ZERO GPU spend and is Milestone 1. THIS is Milestone 2: the one step that needs real
