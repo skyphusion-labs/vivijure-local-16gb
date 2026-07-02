@@ -112,6 +112,7 @@ def build_i2v_run_fn(store, *, workdir: Path | None = None) -> Callable[[dict, C
     The returned fn takes (payload, should_cancel). should_cancel is threaded into the engine's progress
     callback so a /cancel aborts between denoise steps (a torch step is not externally interruptible)."""
     base = Path(workdir) if workdir else Path(tempfile.gettempdir())
+    announced = {"weights": False}  # heads-up the operator once, on the first (cold) job
 
     def run(payload: dict, should_cancel: Callable[[], bool]) -> dict:
         from . import i2v_cogvideox
@@ -121,6 +122,19 @@ def build_i2v_run_fn(store, *, workdir: Path | None = None) -> Callable[[dict, C
         reason = req.validate()
         if reason:
             raise ValueError(reason)
+
+        if not announced["weights"]:
+            # The first job on a cold box loads the model weights before denoise (a cold box also
+            # DOWNLOADS them). /status has no sub-step channel, so it just reads IN_PROGRESS the whole
+            # time -- indistinguishable from a hang unless we say so. Announce it once, to stderr's
+            # sibling stdout the operator tails.
+            announced["weights"] = True
+            print(
+                "vivijure-local: first i2v job on this process -- the model weights load now (a cold "
+                "box downloads them, which can take several minutes before the denoise starts). This "
+                "is NOT a hang; keep polling /status (it stays IN_PROGRESS until the clip is ready).",
+                flush=True,
+            )
 
         job_dir = Path(tempfile.mkdtemp(prefix="vj-local-", dir=str(base)))
         try:
