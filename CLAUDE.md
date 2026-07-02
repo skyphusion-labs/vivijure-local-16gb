@@ -59,8 +59,8 @@ The server owns an in-process **serial** job registry (a consumer card runs ONE 
 RunPod-lifecycle stand-in for a box with no serverless platform. CogVideoX-5B-I2V is a FIXED-GRID model
 (720x480, up to 49 frames @ 8 fps), so the tiers differ by inference STEPS, not resolution: `draft` (30
 steps / 25 frames), `standard` (40 steps / 49 frames), `final` (50 steps / 49 frames), all with model
-CPU offload + VAE tiling/slicing. **VRAM floor + per-clip speed are NOT yet measured** -- Milestone 2
-(the card benchmark) pins them; the numbers in `config.py` are conservative scaffold defaults.
+CPU offload + VAE tiling/slicing. **VRAM floor + per-clip speed are MEASURED** (docs/proof/RESULTS.md):
+the honest floor is a 16GB card, and the tier speeds in the docs are the benchmark numbers.
 
 ## Commands
 

@@ -3,7 +3,7 @@
 > Deliverable: why THIS local door runs **CogVideoX-5B-I2V**, and how it relates to the LTX door. Desk
 > research from model cards / official repos / diffusers docs / reputable community reports -- NO rented
 > hardware. Numbers marked **[community]** are community reports, not vendor-official. The real VRAM
-> floor + per-clip speed are pinned by the on-card benchmark (`live-benchmark-plan.md`, Milestone 2).
+> floor + per-clip speed are now MEASURED on the card (`proof/RESULTS.md`: 16GB floor).
 > Sources at the bottom.
 
 ## The point of a second local door
@@ -36,9 +36,9 @@ CogVideoX-5B-I2V is the quality leader for true i2v that still runs on a consume
   options. That is the entire reason this door exists alongside LTX.
 - **Consumer fit (with offload).** CogVideoX-5B is a 5B DiT transformer plus a large T5-XXL text
   encoder and a 3D VAE, far heavier than LTX -- so CPU offload is not optional. `enable_model_cpu_offload()`
-  + VAE tiling/slicing is the scaffold default (community reports fit a 16GB card); sequential offload
-  drops the floor much lower (~5GB [community]) at a heavy speed cost. The real floor is measured in
-  Milestone 2 -- prove-then-name, exactly like LTX.
+  + VAE tiling/slicing is the shipped default, PROVEN to fit a 16GB card (`proof/RESULTS.md`);
+  sequential offload drops the floor much lower (~5GB [community]) at a heavy speed cost. The floor
+  was proven-then-named, exactly like LTX.
 - **Ecosystem.** First-class `CogVideoXImageToVideoPipeline` in diffusers, present at the pinned
   0.32.2 (verified), so the engine is a thin wrapper and this door KEEPS the LTX door's validated cu124
   recipe -- no dependency bump.

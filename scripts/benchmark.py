@@ -33,7 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from vivijure_local.config import I2VConfig, QualityTier  # noqa: E402
-from vivijure_local import i2v_cogvideox, vram  # noqa: E402
+from vivijure_local import i2v_cogvideox  # noqa: E402
 
 
 def synth_keyframe(path: Path, width: int = 720, height: int = 480) -> Path:
@@ -65,11 +65,9 @@ def run_tier(tier: QualityTier, keyframe: Path, out_dir: Path, prompt: str) -> d
 
     cfg = I2VConfig.from_request({"quality": tier.value}, tier=tier)
     w, h, n = i2v_cogvideox.resolve_engine_dims(cfg)
-    est = vram.estimate(cfg)
     record: dict = {
         "tier": tier.value, "model": cfg.model, "width": w, "height": h, "frames": n,
         "steps": cfg.steps, "offload": cfg.offload.value, "vae_tiling": cfg.vae_tiling,
-        "estimated_peak_gb": est.peak_gb, "estimated_fits_16gb": est.fits,
     }
     out_clip = out_dir / f"sample_{tier.value}.mp4"
     torch.cuda.reset_peak_memory_stats()
@@ -146,8 +144,8 @@ def _write_markdown(path: Path, report: dict) -> None:
         f"- GPU: **{m['gpu']}**",
         f"- keyframe: `{m['keyframe']}`  prompt: _{m['prompt']}_",
         "",
-        "| tier | model | res | frames | steps | offload | est peak | measured peak | fits 16GB | sec/clip | result |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "| tier | model | res | frames | steps | offload | measured peak | fits 16GB | sec/clip | result |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in report["results"]:
         res = f"{r['width']}x{r['height']}"
@@ -157,11 +155,11 @@ def _write_markdown(path: Path, report: dict) -> None:
         outcome = "OK" if r.get("ok") else ("OOM" if r.get("oom") else "FAIL")
         lines.append(
             f"| {r['tier']} | `{Path(r['model']).name}` | {res} | {r['frames']} | {r['steps']} | "
-            f"{r['offload']} | {r['estimated_peak_gb']}GB | {meas} | {fits} | {spc} | {outcome} |"
+            f"{r['offload']} | {meas} | {fits} | {spc} | {outcome} |"
         )
     lines += ["", "Sample clips are written alongside this report; eyeball them for motion quality.",
-              "Update `src/vivijure_local/config.py` (tier ceilings) + `vram.py` (coefficients) from the",
-              "measured peaks, then tag the validated version."]
+              "Update `src/vivijure_local/config.py` (tier ceilings) from the measured peaks, then tag the",
+              "validated version."]
     path.write_text("\n".join(lines) + "\n")
 
 

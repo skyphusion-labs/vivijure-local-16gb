@@ -99,17 +99,19 @@ Where to get them: Cloudflare dashboard -> R2 -> Manage R2 API Tokens (scope the
 docker compose up
 ```
 
-First run downloads the CogVideoX weights (~22GB, once). Then the `ready` service prints a banner with
-your **Backend URL + token**, copy-paste ready.
+The `ready` service prints a banner with your **Backend URL + token**, copy-paste ready. (Your FIRST
+render downloads the CogVideoX weights, ~22GB once, so it takes a good while longer; later renders
+skip the download.)
 
 **3. Paste that URL + token** into your Vivijure studio's "Local (your GPU)" door, pick it, and render.
-A real clip comes back from your own card. That is the whole setup -- no tunnel to configure, no account.
+A real clip comes back from your own card. That is the whole setup -- no tunnel to configure.
 
 > Forgot the R2 creds? The logs tell you exactly which values to set and to run `docker compose up`
 > again -- a plain message, not a stack trace.
 
-Needs an NVIDIA GPU with **16GB+ VRAM** + the
-[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+Needs an NVIDIA GPU with **16GB+ VRAM**, an NVIDIA driver **550 or newer** (the runtime is CUDA 12.4),
+the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html),
+and about **35GB of free disk** (a ~10GB container image + the ~22GB weights).
 CogVideoX-5B needs CPU offload on any consumer card; a 12GB or 14GB card OOMs on the full 49-frame tiers
 (measured). The full walkthrough (tunnel, trade-offs, troubleshooting) is
 **[docs/HOMELABBER.md](docs/HOMELABBER.md)**; studio-side wiring is

@@ -94,7 +94,7 @@ nothing about the running system is a mystery.
 - **What it is:** where the model files (the CogVideoX-5B-I2V weights) are cached inside the container.
 - **Default:** `/models/hf`.
 - **Why fixed:** it points at the `vivijure_models` volume (below) so the ~22GB of weights are downloaded
-  once and reused on every later start, instead of re-downloading each time.
+  once (during your FIRST render) and reused after, instead of re-downloading each time.
 
 ### `ANNOUNCE_BACKEND`
 - **What it is:** the internal address the "ready" banner service checks for health before it prints your
@@ -137,7 +137,7 @@ If you ever DO want a local port for testing on the same machine, add a `ports:`
 
 | Volume | Mounted at | Holds | Why it persists |
 |---|---|---|---|
-| `vivijure_models` | `/models` | the downloaded CogVideoX-5B-I2V model weights (~22GB) | So the big download happens once, not on every start. |
+| `vivijure_models` | `/models` | the downloaded CogVideoX-5B-I2V model weights (~22GB, pulled during your first render) | So the big download happens once, not again. |
 | `vivijure_runtime` | `/shared` | the generated token and the tunnel's log line | So the "ready" banner can read the token and the tunnel web address and print them for you. |
 
 To start completely fresh (re-download models, new token), remove these with

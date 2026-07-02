@@ -9,7 +9,7 @@ always shows it.
 Reads, from the shared volume the other services write:
   /shared/token   -- the LOCAL_BACKEND_TOKEN (the backend writes it, generated if the operator left it blank)
   /shared/cf.log  -- the cloudflared output (the quick-tunnel URL is parsed from here)
-Env: ANNOUNCE_BACKEND (default http://vivijure-local-backend:8000), TUNNEL_TOKEN (set => named tunnel).
+Env: ANNOUNCE_BACKEND (default http://vivijure-local-16gb:8000), TUNNEL_TOKEN (set => named tunnel).
 No torch, no heavy deps -- stdlib only.
 """
 from __future__ import annotations
@@ -56,15 +56,15 @@ def _healthy(backend: str) -> bool:
 
 
 def main() -> int:
-    backend = os.environ.get("ANNOUNCE_BACKEND", "http://vivijure-local-backend:8000")
+    backend = os.environ.get("ANNOUNCE_BACKEND", "http://vivijure-local-16gb:8000")
     named = bool(os.environ.get("TUNNEL_TOKEN"))
 
-    token = _wait(_token, 300) or "(check `docker compose logs vivijure-local-backend`)"
-    healthy = _wait(lambda: _healthy(backend), 600)  # first boot pulls ~10GB of weights; be patient
+    token = _wait(_token, 300) or "(check `docker compose logs vivijure-local-16gb`)"
+    healthy = _wait(lambda: _healthy(backend), 600)  # generous: server + tunnel are up in ~a minute; weights pull on the FIRST RENDER, not here
     url = "(your configured named-tunnel hostname)" if named else (_wait(_quick_url, 300) or "(check `docker compose logs cloudflared`)")
 
     line = "=" * 64
-    status = "LIVE" if healthy else "starting (model still downloading -- it will be LIVE shortly)"
+    status = "LIVE" if healthy else "starting (not answering /health yet -- check `docker compose logs vivijure-local-16gb`)"
     print("\n" + line, flush=True)
     print(f"  Vivijure local backend is {status}", flush=True)
     print("", flush=True)
@@ -73,6 +73,9 @@ def main() -> int:
     print("", flush=True)
     print('  -> Paste these into your Vivijure studio\'s "Local (your GPU)" door', flush=True)
     print("     (LOCAL_BACKEND_URL + LOCAL_BACKEND_TOKEN). That is the whole setup.", flush=True)
+    print("", flush=True)
+    print("  Heads up: your FIRST render also downloads the CogVideoX weights (~22GB,", flush=True)
+    print("  one time), so it takes a good while longer. Later renders skip it.", flush=True)
     print(line + "\n", flush=True)
 
     # Idle so `docker compose logs ready` always shows the banner (don't exit -> don't churn-restart).
