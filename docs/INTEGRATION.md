@@ -80,3 +80,28 @@ binding IS its auth. The backend itself sits behind a Cloudflare tunnel; keep it
 `127.0.0.1` (the compose default) so it is reachable only through the tunnel, and set
 `LOCAL_BACKEND_TOKEN` for defense in depth. A public render endpoint is an unauthenticated GPU-spend /
 DoS trigger against the homelab box.
+
+## Clip duration and cadence (plan beat-sync around it)
+
+CogVideoX-5B-I2V is a fixed 8 fps model with a hard 49-frame ceiling, so this door does NOT render to a
+requested duration -- it renders a FIXED-LENGTH clip per tier and exports it at 8 fps:
+
+| Tier | Frames | Realized length @ 8 fps |
+|---|---|---|
+| `draft` | 25 | ~3.1s |
+| `standard` | 49 | ~6.1s |
+| `final` | 49 | ~6.1s |
+
+Two consequences the studio side must plan for (properties of the model, not knobs this door can honor):
+
+1. **A requested duration is quantized, not honored.** A shot asking for ~5s comes back as ~6.1s on
+   `standard`/`final` or ~3.1s on `draft`. `num_frames` can only LOWER the count within the tier ceiling
+   (snapped to the 4k+1 stride); it can never extend a clip past 49 frames or change the 8 fps cadence.
+2. **The cadence is 8 fps, not 24.** A shared `local-gpu` module may default `fps=24` (the LTX door's
+   cadence); this door ignores it and pins export to 8 fps, because CogVideoX's frames ARE 8 fps frames
+   (exporting them at 24 would play about 3x too fast).
+
+For **beat-sync and audio alignment**, treat a local-16gb clip as a fixed ~3.1s or ~6.1s beat at 8 fps,
+and lay audio / music cuts against the REALIZED length (`output.seconds` in the job result), never
+against the requested seconds. The datacenter door and the LTX door do not share this ceiling, so a film
+that mixes doors will have per-shot lengths that differ by backend -- plan the cut list accordingly.
