@@ -73,10 +73,14 @@ Out-of-scope:
 
 ## Known dependency advisories (pinned ML stack -- deferred, with rationale)
 
-Dependabot reports open advisories against the pinned `transformers==4.46.3` and `diffusers==0.32.2`
-(the sibling door pins the same set). These pins are DELIBERATE: they are the exact `torch 2.4.1` line
-validated in the container proof (`docs/proof/RESULTS.md`). `diffusers` 0.38+ requires a newer `torch`
-and breaks on 2.4, so a bump is not a free merge -- it forces a full re-proof on real silicon.
+The ML stack was RE-PINNED and re-proved on real silicon in the S8 re-pin proof (`docs/proof/REPIN-S8.md`):
+`transformers==4.57.6` and `diffusers==0.38.0` on `torch 2.5.1` (cu124), with `accelerate==1.14.0` /
+`safetensors==0.8.0`. The earlier deferral (pinned `transformers==4.46.3` / `diffusers==0.32.2` on
+`torch 2.4.1`) is now CLOSED. `diffusers` 0.38.0 requires `torch >= 2.5`, so the bump moved the whole
+stack together, validated on an RTX 4090 (both the LTX and CogVideoX doors: pipeline load + i2v render
++ R2 round-trip + the token / 404 hardening). `transformers` is held at the latest 4.x (4.57.6), not
+5.x: `diffusers` 0.38 is not built against `transformers` 5, which additionally breaks the T5 tokenizer
+load without a new `tiktoken` dependency.
 
 Current open advisories (re-verified in S6) and why each is UNREACHABLE in this backend's threat model:
 
@@ -93,20 +97,20 @@ Current open advisories (re-verified in S6) and why each is UNREACHABLE in this 
   caller-reachable ReDoS.
 - The endpoint is token-gated and tunnel-only (see Scope above), not a public multi-tenant surface.
 
-These bumps stay DEFERRED (the S5 decision, re-verified in S6): none is reachable. The re-pin is
-SCHEDULED, not dropped -- Phase B (the higher-fidelity model tier) forces a newer `diffusers`, so the
-whole ML stack is re-proved and re-pinned there. Phase B's GPU re-proof PIGGYBACKS the parked
-install / re-ratification pod round: when Conrad reopens that round, the stack is re-proved on real
-silicon and these pins move in the same pass. That is a concrete trigger, not a vague "later". This
-note is the paper trail -- a degrade is never silent. If you find a NEW advisory that IS reachable here
-(for example, one triggerable through `prompt` text into the pinned model's tokenizer), report it via
-the channel above; that flips the deferral to an immediate re-pin.
+The re-pin is now DONE (not merely scheduled): the diffusers `trust_remote_code` / `custom_pipeline`
+RCE advisories (CVE-2026-44513 / GHSA-98h9-4798-4q5v, CVE-2026-44827 / GHSA-j7w6-vpvq-j3gm) and the
+TOCTOU variant (CVE-2026-45804) are FIXED in `diffusers` 0.38.0 (the gate moved into
+`get_cached_module_file`, huggingface/diffusers PR #13448). Reachability was and remains NONE here --
+we never set `trust_remote_code` and load only a pinned model id -- so this bump is defense-in-depth
+hygiene, now closed out on a real-silicon proof (S8) rather than a live-exposure fix. This note is the
+paper trail -- a degrade is never silent. If you find a NEW advisory that IS reachable here (for
+example, one triggerable through `prompt` text into the pinned model tokenizer), report it via the
+channel above; that flips to an immediate re-pin.
 
 The non-ML runtime deps (`accelerate`, `safetensors`, `sentencepiece`, `imageio`, `imageio-ffmpeg`,
-`av`, `boto3`) are now pinned to exact versions -- their declared, tested-with floors -- for reproducible
-builds (the specific floors such as `imageio` 2.37.3 / `av` 17.1.0 / `boto3` 1.43.38 are the versions
-present at authoring / proof, not arbitrary minimums). A captured `pip freeze` lockfile will replace the
-floor-pins at the same Phase B pod re-proof, when a real build is available to freeze.
+`av`, `boto3`) are pinned to exact versions for reproducible builds, re-confirmed against the S8 re-pin
+build on real silicon (`accelerate` moved to 1.14.0 and `safetensors` to 0.8.0 as the resolved set on
+torch 2.5.1; `imageio` 2.37.3 / `av` 17.1.0 / `boto3` 1.43.38 unchanged).
 
 ## Acceptable use
 

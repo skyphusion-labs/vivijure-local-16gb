@@ -1,9 +1,9 @@
 # vivijure-local-16gb runtime image (the CogVideoX consumer door).
 #
 # torch/torchvision install from the CUDA index matched to the card's driver line, PINNED to the set
-# validated in the 12GB/16GB container proof (torch 2.4.1 + torchvision 0.19.1 from cu124, paired with
-# diffusers 0.32.2 / transformers 4.46.3 in requirements.txt; CogVideoXImageToVideoPipeline is present at
-# 0.32.2). Built to run on the user's own consumer card (Ada / CUDA 12.x), NOT on RunPod. Run it via docker-compose.yml or `docker run --gpus all`.
+# validated on real silicon in the S8 re-pin proof (torch 2.5.1 + torchvision 0.20.1 from cu124, paired
+# with diffusers 0.38.0 / transformers 4.57.6 in requirements.txt; CogVideoXImageToVideoPipeline loads +
+# renders on 0.38.0; see SECURITY.md). Built to run on the user's own consumer card (Ada / CUDA 12.x), NOT on RunPod. Run it via docker-compose.yml or `docker run --gpus all`.
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # torch first, from the CUDA wheel index (Ada / cu124). Pinned to the proof-validated pair.
-RUN pip3 install --index-url https://download.pytorch.org/whl/cu124 torch==2.4.1 torchvision==0.19.1
+RUN pip3 install --index-url https://download.pytorch.org/whl/cu124 torch==2.5.1 torchvision==0.20.1
 
 COPY requirements.txt /app/requirements.txt
 RUN pip3 install -r /app/requirements.txt

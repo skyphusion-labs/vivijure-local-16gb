@@ -1,25 +1,24 @@
-# NOTE (S6): the non-ML runtime deps below are pinned to EXACT versions (their declared,
-# tested-with floors) for reproducible builds -- not bumped. The ML pins (diffusers /
-# transformers on torch 2.4.1) stay deferred; see SECURITY.md for the reachability paper trail
-# and the Phase B re-proof that will replace these floor-pins with a captured pip-freeze lockfile.
+# NOTE (S8 re-pin): the ML stack was RE-PINNED and re-proved on real silicon -- diffusers 0.38.0 +
+# transformers 4.57.6 on torch 2.5.1 (cu124), accelerate 1.14.0 / safetensors 0.8.0. See SECURITY.md
+# for the advisory paper trail. All deps below are pinned to exact, validated versions for reproducible builds.
 
 # vivijure-local-16gb runtime stack (the CogVideoX consumer door). CogVideoX-5B-I2V image-to-video
 # on a single consumer card, plus R2 object I/O. torch/torchvision are installed from the CUDA index in
 # deploy/Dockerfile (matched to the card's CUDA line). diffusers/transformers are PINNED to the exact
-# set already validated against torch 2.4.1 in the LTX door's container proof: CogVideoXImageToVideoPipeline
-# landed in diffusers ~0.30.3 and is present at 0.32.2 (verified), so this door KEEPS the shared cu124
-# recipe -- no bump needed (newer diffusers 0.38+ require a newer torch and break on 2.4). transformers
-# 4.46.3 is the matching line for this diffusers release.
+# set validated on real silicon in the S8 re-pin proof: diffusers 0.38.0 on torch 2.5.1 (cu124) --
+# CogVideoXImageToVideoPipeline loads + renders on 0.38.0 (verified) -- with transformers pinned to the
+# latest 4.x (4.57.6). diffusers 0.38 requires torch >= 2.5 and is not built against transformers 5.x
+# (which also needs a new tiktoken dep), so we stay on 4.x. See SECURITY.md for the paper trail.
 #
 # Phase A = CogVideoX-5B-I2V (THUDM/CogVideoX-5b-I2V), which this recipe supports. Phase B (a FUTURE
 # milestone) may add CogVideoX1.5-5B-I2V; if that variant needs a newer diffusers, that is a separate,
-# justified pin bump gated on staying on torch 2.4.1+cu124 -- not this milestone.
+# justified pin bump gated on the current torch 2.5.1+cu124 recipe -- not this milestone.
 
 # --- CogVideoX-5B-I2V engine (HuggingFace diffusers) ---
-diffusers==0.32.2          # CogVideoXImageToVideoPipeline present here; validated on torch 2.4.1; 0.38+ breaks on 2.4
-transformers==4.46.3       # the transformers line validated with diffusers 0.32.2 on torch 2.4
-accelerate==0.34.0         # enable_model_cpu_offload / enable_sequential_cpu_offload (the consumer-VRAM savers)
-safetensors==0.4.5
+diffusers==0.38.0          # CogVideoXImageToVideoPipeline; validated on torch 2.5.1 (S8 re-pin proof)
+transformers==4.57.6       # latest 4.x; validated with diffusers 0.38.0 on torch 2.5.1 (5.x breaks the T5 tokenizer load)
+accelerate==1.14.0         # enable_model_cpu_offload / enable_sequential_cpu_offload (the consumer-VRAM savers)
+safetensors==0.8.0
 sentencepiece==0.2.0       # CogVideoX T5-XXL text encoder tokenizer
 imageio==2.37.3
 imageio-ffmpeg==0.6.0      # export_to_video
