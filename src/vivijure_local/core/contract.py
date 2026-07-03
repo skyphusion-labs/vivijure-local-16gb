@@ -6,6 +6,11 @@ point: the same control plane and the same `buildI2vBody` drive either door. The
 writes the clip to the shared R2 bucket and returns a pointer-only result (the clip_key), exactly as
 the datacenter handler does. Parsing is forgiving (unknown keys ignored), so the control plane can add
 authored fields without breaking an older backend.
+
+HARD INVARIANT (#129): the request/result shape + the two R2 key templates below are the single
+`i2v_clip` wire contract, locked against drift by `tests/fixtures/i2v_clip_contract.json`
+(byte-identical across this door, the sibling door, and vivijure-backend) and asserted by
+`tests/test_i2v_clip_conformance.py`.
 """
 from __future__ import annotations
 
