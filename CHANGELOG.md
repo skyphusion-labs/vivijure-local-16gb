@@ -14,6 +14,10 @@ Fix the default quick-tunnel bring-up (compose + ready-banner fix; the render en
   Backend URL. The service now invokes cloudflared natively:
   `tunnel --url http://vivijure-local-16gb:8000 --logfile /shared/cf.log`. No shell, no entrypoint override, no
   dependence on the distroless image's contents.
+- **The backend pre-creates the tunnel logfile for cloudflared's nonroot UID.** `cloudflare/cloudflared`
+  runs as nonroot (65532) and cannot create `/shared/cf.log` in the root-owned shared volume, so
+  `--logfile` failed with permission-denied and the banner got no URL. The backend entrypoint (root) now
+  pre-creates `/shared/cf.log` owned by 65532; `/shared` stays root-owned and the token stays root-only.
 - **The named tunnel is now a documented `docker-compose.override.yml`** (see HOMELABBER "A stable
   address") instead of an automatic `.env` switch, because a shell-free static command cannot branch on
   whether `TUNNEL_TOKEN` is set. The novice quick-tunnel path stays the tracked default.
@@ -22,9 +26,12 @@ Fix the default quick-tunnel bring-up (compose + ready-banner fix; the render en
   quick URL appears and `TUNNEL_TOKEN` is set, with a one-line hint so a partial config self-diagnoses.
   Keeps "a degrade is never silent": the banner never claims a named hostname while a quick URL is live.
 
-Honest history: with the wrong entrypoint AND no shell in the image, this compose tunnel service was
-never functional; any tunnel URL seen in earlier proofs was produced by a hand-run cloudflared
-out-of-band, not by `docker compose up`.
+Honest history: the 2026-06-18 switch of `cloudflare/cloudflared:latest` to a distroless nonroot base
+broke this compose tunnel service two ways at once -- it removed the shell the inline `sh -c` script
+needed, AND it dropped cloudflared to a nonroot UID (65532) that cannot write the root-owned `/shared`.
+Combined with the pre-existing entrypoint mismatch, the service was never functional via
+`docker compose up`; any tunnel URL in earlier proofs came from a hand-run cloudflared out-of-band.
+v0.1.1 addresses all three.
 
 ## v0.1.0 -- 2026-07-04
 

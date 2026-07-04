@@ -41,7 +41,9 @@ services:
       - vivijure_models:/models      # CogVideoX weights cache: pulled during the FIRST render, reused after
       - vivijure_runtime:/shared     # the token + tunnel log the `ready` banner reads
     # Generate a strong token if the operator left it blank, publish it to the shared volume for the
-    # banner, then serve. Secure-by-default stays one-command (no open endpoint, no mandatory pre-step).
+    # banner, then serve. Also pre-create /shared/cf.log owned by cloudflared's nonroot UID (65532) so
+    # the distroless nonroot cloudflared can write its tunnel log there; /shared itself stays root-owned,
+    # so the token stays root-only. Secure-by-default stays one-command (no open endpoint, no pre-step).
     command:
       - sh
       - -c
@@ -50,6 +52,7 @@ services:
           export LOCAL_BACKEND_TOKEN=$$(python3 -c "import secrets; print(secrets.token_hex(24))");
         fi;
         mkdir -p /shared; printf "%s" "$$LOCAL_BACKEND_TOKEN" > /shared/token;
+        touch /shared/cf.log; chown 65532:65532 /shared/cf.log; chmod 0644 /shared/cf.log;
         exec python3 -m vivijure_local.core.server
     deploy:
       resources:
@@ -84,6 +87,8 @@ services:
       - vivijure_runtime:/shared
     # cloudflared's own entrypoint is ["cloudflared","--no-autoupdate"], so command supplies only the
     # tunnel subcommand. --logfile writes the quick-tunnel URL to the shared volume for the banner.
+    # The backend service pre-creates /shared/cf.log owned by this image's nonroot UID (65532) so this
+    # write succeeds -- cloudflared cannot create files in the root-owned /shared itself.
     command: ["tunnel", "--url", "http://vivijure-local-16gb:8000", "--logfile", "/shared/cf.log"]
 
   # The "ready" banner: waits for the tunnel up + backend healthy + token written, then prints the
