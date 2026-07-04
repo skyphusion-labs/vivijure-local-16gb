@@ -1,0 +1,115 @@
+name: Publish door image to GHCR
+
+# Build + push the vivijure-local-16gb consumer-door image (CogVideoX i2v, runs on the user own GPU) so
+# a novice PULLS a prebuilt image instead of cold-building torch layers on their box (Conrad ease-of-
+# installation ruling; issue #23). Image + version come from a git TAG, never a parsed commit subject:
+#
+#   vX.Y.Z  ->  ghcr.io/skyphusion-labs/vivijure-local-16gb:X.Y.Z (+ :latest)
+#
+# A plain commit/branch push is a NO-OP: this workflow triggers ONLY on v* tags (or a maintainer
+# workflow_dispatch). This pipeline BUILDS + PUSHES; it does not deploy anything (a local door has no
+# serverless endpoint -- the operator pulls the image via docker-compose.yml).
+#
+# Runner: GitHub-hosted ubuntu-latest. This repo is PUBLIC, so a self-hosted fleet runner is off the
+# table (a fork PR could run untrusted code on a fleet box); GitHub-hosted runners are fork-safe. The
+# build only runs on a v* tag / dispatch (maintainer-only -- a fork PR cannot create a tag), so
+# packages:write is never exposed to a fork. The image is ~8.5GB, so a disk-reclaim step runs first
+# (ubuntu-latest ships less free root disk than the built image + torch build cache need).
+#
+# NOTE vs vivijure-backend release.yml (the model): the backend BAKES ~90GB of weights, so it stages an
+# R2 seed, bin-packs sub-10GB layers, and import-smokes to guard a hollow bake. This door BAKES NO
+# weights (CogVideoX pulls on the first render into a volume), so none of that applies -- this is a
+# plain build + push with a disk reclaim. GHCR auth uses the built-in GITHUB_TOKEN (packages:write
+# below), not a long-lived PAT: least privilege, blast radius of one workflow run.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image version X.Y.Z (manual build; a tag build derives it from the tag)."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: skyphusion-labs
+  IMAGE: vivijure-local-16gb
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: cfg
+        run: |
+          set -eu
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            VER="${{ inputs.version }}"
+          else
+            # github.ref_name is the tag on a tag push, e.g. "v0.1.0".
+            TAG="${GITHUB_REF_NAME}"
+            if [[ "${TAG}" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              VER="${BASH_REMATCH[1]}"
+            else
+              echo "::error::Tag '${TAG}' is not a vX.Y.Z release tag; nothing to build."
+              exit 1
+            fi
+          fi
+          if [[ ! "${VER}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version '${VER}' is not X.Y.Z"; exit 1
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "Building ${IMAGE}:${VER} (+ :latest)."
+
+      # ubuntu-latest ships less free root disk than an ~8.5GB image + torch build cache need. Reclaim
+      # the big preinstalled toolchains (dotnet / android / ghc / CodeQL) up front -- dependency-free,
+      # no third-party action. Frees ~25GB+ on /.
+      - name: Reclaim runner disk for the image build
+        run: |
+          set -eu
+          echo "Free space before:"; df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          sudo docker image prune -af || true
+          echo "Free space after:"; df -h / | tail -1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push :X.Y.Z and :latest
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          pull: true
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.IMAGE }}:${{ steps.cfg.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.IMAGE }}:latest
+
+      - name: Summary
+        run: |
+          echo "Pushed ${IMAGE}:${{ steps.cfg.outputs.version }} and :latest to ${REGISTRY}/${OWNER}."
