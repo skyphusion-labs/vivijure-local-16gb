@@ -49,8 +49,11 @@ def _quick_url() -> str:
     f = SHARED / "cf.log"
     if not f.exists():
         return ""
-    m = TRYCF.search(f.read_text(errors="ignore"))
-    return m.group(0) if m else ""
+    # cf.log lives on the persistent /shared volume and cloudflared APPENDS a fresh quick-tunnel
+    # URL on every (re)start, so the FIRST match is a stale/dead URL after any restart (#52). Take
+    # the LAST match -> the current run's URL. init-shared also clears cf.log on start (belt+braces).
+    matches = TRYCF.findall(f.read_text(errors="ignore"))
+    return matches[-1] if matches else ""
 
 
 def _healthy(backend: str) -> bool:
