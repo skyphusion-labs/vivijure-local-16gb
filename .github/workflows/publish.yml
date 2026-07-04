@@ -10,16 +10,19 @@ name: Publish door image to GHCR
 # workflow_dispatch). This pipeline BUILDS + PUSHES; it does not deploy anything (a local door has no
 # serverless endpoint -- the operator pulls the image via docker-compose.yml).
 #
-# Runner: GitHub-hosted ubuntu-latest. This repo is PUBLIC, so a self-hosted fleet runner is off the
-# table (a fork PR could run untrusted code on a fleet box); GitHub-hosted runners are fork-safe. The
-# build only runs on a v* tag / dispatch (maintainer-only -- a fork PR cannot create a tag), so
-# packages:write is never exposed to a fork. The image is ~8.5GB, so a disk-reclaim step runs first
-# (ubuntu-latest ships less free root disk than the built image + torch build cache need).
+# Runner: the GitHub-hosted LARGER runner "vivijure-bake-local" (bare label; the paid hosted-larger
+# capacity class, ~300GB disk, same form as vivijure-backend release.yml "vivijure-bake"). Conrad
+# ruling 2026-07-04: we pay for runner capacity, so we USE it -- no disk-reclaim gymnastics on an
+# undersized runner. Still fork-safe trivially: a hosted-larger runner is an ephemeral VM (NOT a
+# persistent self-hosted box), AND this workflow triggers ONLY on v* tags + maintainer
+# workflow_dispatch, which a fork cannot create, so untrusted code never reaches the runner and
+# packages:write is never exposed to a fork. The larger-runner disk swallows the ~8.5GB image + torch
+# build cache with room to spare, so there is NO disk-reclaim step.
 #
 # NOTE vs vivijure-backend release.yml (the model): the backend BAKES ~90GB of weights, so it stages an
 # R2 seed, bin-packs sub-10GB layers, and import-smokes to guard a hollow bake. This door BAKES NO
 # weights (CogVideoX pulls on the first render into a volume), so none of that applies -- this is a
-# plain build + push with a disk reclaim. GHCR auth uses the built-in GITHUB_TOKEN (packages:write
+# plain build + push with no disk-reclaim step (the larger runner has the headroom). GHCR auth uses the built-in GITHUB_TOKEN (packages:write
 # below), not a long-lived PAT: least privilege, blast radius of one workflow run.
 
 on:
@@ -48,7 +51,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: vivijure-bake-local
     timeout-minutes: 60
     steps:
       - name: Checkout repository
@@ -75,18 +78,6 @@ jobs:
           fi
           echo "version=${VER}" >> "$GITHUB_OUTPUT"
           echo "Building ${IMAGE}:${VER} (+ :latest)."
-
-      # ubuntu-latest ships less free root disk than an ~8.5GB image + torch build cache need. Reclaim
-      # the big preinstalled toolchains (dotnet / android / ghc / CodeQL) up front -- dependency-free,
-      # no third-party action. Frees ~25GB+ on /.
-      - name: Reclaim runner disk for the image build
-        run: |
-          set -eu
-          echo "Free space before:"; df -h / | tail -1
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
-          sudo docker image prune -af || true
-          echo "Free space after:"; df -h / | tail -1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
