@@ -5,7 +5,7 @@ All notable changes to vivijure-local-16gb are recorded here. This project follo
 
 ## v0.1.1 -- 2026-07-04
 
-Fix the default quick-tunnel bring-up (compose-only; the published image is unchanged).
+Fix the default quick-tunnel bring-up (compose + ready-banner fix; the render engine is unchanged).
 
 - **cloudflared no longer crash-loops on `docker compose up`.** The `cloudflared` service wrapped its
   tunnel startup in an inline `sh -c` script, but the `cloudflare/cloudflared` image is distroless (no
@@ -17,6 +17,10 @@ Fix the default quick-tunnel bring-up (compose-only; the published image is unch
 - **The named tunnel is now a documented `docker-compose.override.yml`** (see HOMELABBER "A stable
   address") instead of an automatic `.env` switch, because a shell-free static command cannot branch on
   whether `TUNNEL_TOKEN` is set. The novice quick-tunnel path stays the tracked default.
+- **The ready banner reports the real tunnel state.** It shows the actual quick-tunnel URL whenever one
+  is live (regardless of whether `TUNNEL_TOKEN` is set), and prints the named-hostname line only when no
+  quick URL appears and `TUNNEL_TOKEN` is set, with a one-line hint so a partial config self-diagnoses.
+  Keeps "a degrade is never silent": the banner never claims a named hostname while a quick URL is live.
 
 Honest history: with the wrong entrypoint AND no shell in the image, this compose tunnel service was
 never functional; any tunnel URL seen in earlier proofs was produced by a hand-run cloudflared

@@ -62,11 +62,30 @@ def _healthy(backend: str) -> bool:
 
 def main() -> int:
     backend = os.environ.get("ANNOUNCE_BACKEND", f"http://{SERVICE}:8000")
-    named = bool(os.environ.get("TUNNEL_TOKEN"))
+    token_configured = bool(os.environ.get("TUNNEL_TOKEN"))
 
     token = _wait(_token, 300) or f"(check `docker compose logs {SERVICE}`)"
     healthy = _wait(lambda: _healthy(backend), 600)  # generous: server + tunnel are up in ~a minute; weights pull on the FIRST RENDER, not here
-    url = "(your configured named-tunnel hostname)" if named else (_wait(_quick_url, 300) or "(check `docker compose logs cloudflared`)")
+    # Reality-based banner: show the ACTUAL quick-tunnel URL if one is live, regardless of config, so
+    # the banner never lies. A named tunnel (docker-compose.override.yml -> `tunnel run`) writes no
+    # trycloudflare URL, so if TUNNEL_TOKEN is set and no quick URL appears in a short window the
+    # operator is on the named path. If TUNNEL_TOKEN is set but the override was forgotten, cloudflared
+    # still runs the QUICK tunnel and logs its URL -- surface THAT rather than claiming a named hostname.
+    hint = ""
+    if not token_configured:
+        url = _wait(_quick_url, 300) or "(check `docker compose logs cloudflared`)"
+    else:
+        quick = _wait(_quick_url, 30)
+        if quick:
+            url = quick
+        else:
+            url = "(your configured named-tunnel hostname)"
+            hint = (
+                "  Note: expected a quick URL? cloudflared may still be starting -- re-check "
+                "`docker compose logs cloudflared`.\n"
+                "        Expected a named tunnel? Confirm your docker-compose.override.yml sets "
+                'cloudflared `command: ["tunnel", "run"]`.'
+            )
 
     line = "=" * 64
     status = "LIVE" if healthy else f"starting (not answering /health yet -- check `docker compose logs {SERVICE}`)"
@@ -78,6 +97,9 @@ def main() -> int:
     print("", flush=True)
     print('  -> Paste these into your Vivijure studio\'s "Local (your GPU)" door', flush=True)
     print("     (LOCAL_BACKEND_URL + LOCAL_BACKEND_TOKEN). That is the whole setup.", flush=True)
+    if hint:
+        print("", flush=True)
+        print(hint, flush=True)
     print("", flush=True)
     print(f"  Heads up: your FIRST render also downloads {WEIGHTS_NOTE}", flush=True)
     print(line + "\n", flush=True)
