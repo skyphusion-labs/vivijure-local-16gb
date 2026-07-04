@@ -16,9 +16,113 @@ You need: an NVIDIA GPU with **16GB+ VRAM** (the measured floor; 12GB and 14GB c
 (one install so the container can see your GPU), and about **35GB of free disk** (container image +
 the ~22GB weights). That's it.
 
+Starting from a fresh Ubuntu box with none of these installed yet? Do **Install the prerequisites**
+just below first, then come back to the R2 step and the run.
+
+### Install the prerequisites (Ubuntu 22.04 / 24.04)
+
+You do this ONCE per box. Copy each block, run it, and check the "you should see" line before moving on.
+The commands below follow each project's official install guide (cited under each step); we have not
+run a from-scratch driver install on bare metal ourselves, so if a command changed upstream, the linked
+guide is the source of truth. On a non-Ubuntu distro, use the same three guides for your package manager.
+
+**1. NVIDIA driver (550 or newer).** The distro-standard route picks the recommended driver for your
+card:
+
+```sh
+sudo ubuntu-drivers install
+sudo reboot
+```
+
+After the reboot, check it:
+
+```sh
+nvidia-smi
+```
+
+You should see a table with your GPU and a **Driver Version of 550 or higher** (and a CUDA Version of
+12.x). If `ubuntu-drivers` installed something older than 550 (can happen on 22.04), list the options
+with `ubuntu-drivers devices` and install a 550+ branch explicitly, e.g. `sudo ubuntu-drivers install
+nvidia:550`, then reboot again.
+(Source: Ubuntu Server "Install NVIDIA drivers" -- https://documentation.ubuntu.com/server/how-to/graphics/install-nvidia-drivers/)
+
+**2. Docker Engine + the compose plugin (Docker's official apt repo).**
+
+```sh
+# Add Docker's official GPG key
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the Docker repo to apt
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+
+# Install the engine, CLI, and the compose plugin
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+Optional but handy, so you do not need `sudo` for every docker command:
+
+```sh
+sudo usermod -aG docker $USER
+newgrp docker    # or just log out and back in, so the new group takes effect
+```
+
+Check it:
+
+```sh
+docker run --rm hello-world
+```
+
+You should see Docker's "Hello from Docker!" message. If you get `permission denied` on the socket, you
+skipped the `usermod`/`newgrp` step above (or need to log out and back in).
+(Source: Docker "Install Docker Engine on Ubuntu" -- https://docs.docker.com/engine/install/ubuntu/)
+
+**3. NVIDIA Container Toolkit (NVIDIA's official apt repo).** This is what lets the container see your
+GPU:
+
+```sh
+# Add NVIDIA's repo
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+  sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+
+# Wire the toolkit into Docker and restart the daemon
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+Now the "prereqs OK" gate -- the container must be able to run `nvidia-smi` on your card:
+
+```sh
+docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+```
+
+You should see the SAME GPU table as step 1, but printed from INSIDE a container. If that works, every
+prerequisite is in place and you are ready to run vivijure.
+(Source: NVIDIA "Installing the NVIDIA Container Toolkit" -- https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+
 ONE setup step before you start: your Vivijure studio's Cloudflare R2 credentials (this backend shares
 that bucket -- it reads the keyframe and writes the finished clip there). Get them from the Cloudflare
 dashboard -> R2 -> Manage R2 API Tokens, scoped to your bucket.
+
+Getting `R2_ACCOUNT_ID` right matters (a wrong value returns a 403, not a clear error): it is your
+**Cloudflare account ID**, a 32-character hex string, NOT part of the access key or secret. Find it in
+the R2 S3 API endpoint Cloudflare shows for your bucket, `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
+(the account ID is the part before `.r2.cloudflarestorage.com`); it is also the hex ID in your dashboard
+URL, `https://dash.cloudflare.com/<ACCOUNT_ID>`. The access key ID and secret are the OTHER two values,
+shown once when you create the R2 API token.
 
 ```sh
 git clone https://github.com/skyphusion-labs/vivijure-local-16gb

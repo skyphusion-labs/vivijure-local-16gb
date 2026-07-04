@@ -122,7 +122,9 @@ Needs an NVIDIA GPU with **16GB+ VRAM**, an NVIDIA driver **550 or newer** (the 
 the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html),
 and about **35GB of free disk** (a ~10GB container image + the ~22GB weights).
 CogVideoX-5B needs CPU offload on any consumer card; a 12GB or 14GB card OOMs on the full 49-frame tiers
-(measured). The full walkthrough (tunnel, trade-offs, troubleshooting) is
+(measured). Starting from a bare Ubuntu box? **[docs/HOMELABBER.md](docs/HOMELABBER.md)** has copy-paste
+steps to install the driver, Docker, and the NVIDIA Container Toolkit before you run. The full
+walkthrough (tunnel, trade-offs, troubleshooting) is
 **[docs/HOMELABBER.md](docs/HOMELABBER.md)**; studio-side wiring is
 **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 
