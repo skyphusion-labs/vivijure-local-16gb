@@ -66,9 +66,12 @@ services:
       start_period: 120s
 
   # The tunnel (invisible to the user): a studio-reachable public URL with zero account/config.
-  #  - DEFAULT (no TUNNEL_TOKEN): a TryCloudflare QUICK tunnel; its URL is tee'd to /shared/cf.log for
-  #    the banner. No CF account, no domain, no login.
-  #  - NAMED (set TUNNEL_TOKEN in .env): a stable, named tunnel (the documented upgrade) with your hostname.
+  # DEFAULT: a TryCloudflare QUICK tunnel. cloudflared writes its log (including the URL line) to
+  # /shared/cf.log via --logfile, where the `ready` banner reads it. No CF account, no domain, no login.
+  # The cloudflare/cloudflared image is distroless (no shell), so cloudflared runs NATIVELY here (no sh
+  # wrapper). For a stable NAMED tunnel, see docs/HOMELABBER.md "A stable address": a small
+  # docker-compose.override.yml sets command: ["tunnel","run"] (cloudflared reads TUNNEL_TOKEN), so the
+  # tracked file stays the novice quick-tunnel default.
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: vivijure-cloudflared
@@ -79,16 +82,9 @@ services:
       - .env
     volumes:
       - vivijure_runtime:/shared
-    command:
-      - sh
-      - -c
-      - >
-        mkdir -p /shared;
-        if [ -n "$$TUNNEL_TOKEN" ]; then
-          exec cloudflared tunnel --no-autoupdate run --token "$$TUNNEL_TOKEN";
-        else
-          cloudflared tunnel --no-autoupdate --url http://vivijure-local-16gb:8000 2>&1 | tee /shared/cf.log;
-        fi
+    # cloudflared's own entrypoint is ["cloudflared","--no-autoupdate"], so command supplies only the
+    # tunnel subcommand. --logfile writes the quick-tunnel URL to the shared volume for the banner.
+    command: ["tunnel", "--url", "http://vivijure-local-16gb:8000", "--logfile", "/shared/cf.log"]
 
   # The "ready" banner: waits for the tunnel up + backend healthy + token written, then prints the
   # copy-paste Backend URL + token ONCE and idles. The user reads THIS, never the raw logs.

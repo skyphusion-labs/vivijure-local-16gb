@@ -3,6 +3,25 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.1.1 -- 2026-07-04
+
+Fix the default quick-tunnel bring-up (compose-only; the published image is unchanged).
+
+- **cloudflared no longer crash-loops on `docker compose up`.** The `cloudflared` service wrapped its
+  tunnel startup in an inline `sh -c` script, but the `cloudflare/cloudflared` image is distroless (no
+  shell) and its entrypoint is `cloudflared --no-autoupdate`, so the script was passed to cloudflared as
+  arguments and never ran; the default quick tunnel never started and the `ready` banner never printed a
+  Backend URL. The service now invokes cloudflared natively:
+  `tunnel --url http://vivijure-local-16gb:8000 --logfile /shared/cf.log`. No shell, no entrypoint override, no
+  dependence on the distroless image's contents.
+- **The named tunnel is now a documented `docker-compose.override.yml`** (see HOMELABBER "A stable
+  address") instead of an automatic `.env` switch, because a shell-free static command cannot branch on
+  whether `TUNNEL_TOKEN` is set. The novice quick-tunnel path stays the tracked default.
+
+Honest history: with the wrong entrypoint AND no shell in the image, this compose tunnel service was
+never functional; any tunnel URL seen in earlier proofs was produced by a hand-run cloudflared
+out-of-band, not by `docker compose up`.
+
 ## v0.1.0 -- 2026-07-04
 
 First public release of the CogVideoX local render door: the studio's image-to-video motion engine
