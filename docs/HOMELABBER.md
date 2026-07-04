@@ -31,6 +31,10 @@ docker compose up
 `docker compose up` PULLS the prebuilt image from GHCR, so there is no long local build -- you go
 straight to rendering. (Prefer to build from source? `docker compose up --build`.)
 
+Updating: `docker compose up` PULLS the image once, then `pull_policy: missing` means it never
+re-pulls on its own -- no surprise auto-updates. To move to a newer release, pull it explicitly with
+`docker compose pull`, then `docker compose up -d`.
+
 (Forgot the R2 creds? The backend prints a plain message telling you exactly what to set -- not a stack
 trace -- and you just run `docker compose up` again.)
 
