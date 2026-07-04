@@ -99,6 +99,10 @@ Where to get them: Cloudflare dashboard -> R2 -> Manage R2 API Tokens (scope the
 docker compose up
 ```
 
+`docker compose up` PULLS the prebuilt image from `ghcr.io/skyphusion-labs/vivijure-local-16gb:latest`
+(no local build; that is the whole ease-of-install point). Prefer to build from source? Run
+`docker compose up --build` instead and compose builds `deploy/Dockerfile` locally.
+
 The `ready` service prints a banner with your **Backend URL + token**, copy-paste ready. (Your FIRST
 render downloads the CogVideoX weights, ~22GB once, so it takes a good while longer; later renders
 skip the download.)
