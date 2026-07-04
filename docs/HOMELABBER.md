@@ -16,6 +16,17 @@ You need: an NVIDIA GPU with **16GB+ VRAM** (the measured floor; 12GB and 14GB c
 (one install so the container can see your GPU), and about **35GB of free disk** (container image +
 the ~22GB weights). That's it.
 
+> ### A real, dedicated GPU is required -- cloud "vGPU" slices do NOT work with this door
+>
+> A GRID/vGPU-sliced card (the mediated-passthrough kind many cloud "vGPU" plans rent, such as the
+> NVIDIA **A16-16Q** "16Q" profile) produces **pure-noise, corrupt clips** with CogVideoX-5B, even
+> though the render reports COMPLETED and the VRAM number looks right. There is no error and no
+> warning -- just a valid-looking mp4 that is latent noise on every frame. This is **deterministic**,
+> confirmed across multiple cloud boxes and every door version (#35). The 16GB floor above assumes
+> **physical silicon** (a whole card passed through, not a slice). If your only option is a vGPU
+> slice, use the **[12GB LTX door](https://github.com/skyphusion-labs/vivijure-local-12gb)** instead:
+> it renders correctly on the very same vGPU hardware.
+
 Starting from a fresh Ubuntu box with none of these installed yet? Do **Install the prerequisites**
 just below first, then come back to the R2 step and the run.
 

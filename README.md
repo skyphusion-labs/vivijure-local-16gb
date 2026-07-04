@@ -128,6 +128,17 @@ walkthrough (tunnel, trade-offs, troubleshooting) is
 **[docs/HOMELABBER.md](docs/HOMELABBER.md)**; studio-side wiring is
 **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 
+> ### A real, dedicated GPU is required -- cloud "vGPU" slices do NOT work with this door
+>
+> A GRID/vGPU-sliced card (the mediated-passthrough kind many cloud "vGPU" plans rent, such as the
+> NVIDIA **A16-16Q** "16Q" profile) produces **pure-noise, corrupt clips** with CogVideoX-5B, even
+> though the render reports COMPLETED and the VRAM number looks right. There is no error and no
+> warning -- just a valid-looking mp4 that is latent noise on every frame. This is **deterministic**,
+> confirmed across multiple cloud boxes and every door version (#35). The 16GB floor above assumes
+> **physical silicon** (a whole card passed through, not a slice). If your only option is a vGPU
+> slice, use the **[12GB LTX door](https://github.com/skyphusion-labs/vivijure-local-12gb)** instead:
+> it renders correctly on the very same vGPU hardware.
+
 ## Configuration (`.env`)
 
 Copy `.env.example` to `.env` and fill it in. Every setting is an environment variable:
