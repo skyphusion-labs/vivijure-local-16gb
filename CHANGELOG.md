@@ -3,6 +3,24 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.1.2 -- 2026-07-04
+
+Ready-banner correctness after a restart, plus a bare-OS prerequisite-install guide. The render
+engine is unchanged.
+
+- **The ready banner now shows the CURRENT quick-tunnel URL after a restart (#32).**
+  `announce` parsed the FIRST match in `/shared/cf.log`, but that log is on the persistent volume and
+  cloudflared APPENDS a fresh URL on every (re)start, so after any restart (the documented
+  `docker compose up -d` update path, a reboot, or a crash) the banner advertised the oldest, dead URL
+  and the studio could not reach the box. It now takes the LAST match, and `init-shared` clears
+  `cf.log` on start (`rm -f`, so the nonroot cloudflared keeps ownership under the sticky `/shared`).
+  Verified live on a real box with a full restart cycle.
+- **Bare-OS prerequisite-install guide in the quickstart (#30).** The docs previously only
+  stated the requirements (NVIDIA driver 550+, Docker, NVIDIA Container Toolkit) and linked out; a
+  novice on a fresh OS now gets the actual install commands.
+- **`__version__` bumped to 0.1.2** so `/health` reports the shipped version (it was left at 0.1.0
+  through v0.1.1).
+
 ## v0.1.1 -- 2026-07-04
 
 Fix the default quick-tunnel bring-up (compose + ready-banner fix; the render engine is unchanged).
