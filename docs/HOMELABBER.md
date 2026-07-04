@@ -100,8 +100,18 @@ on an RTX 4090 24GB (`docs/proof/RESULTS.md`); a 16GB card runs slower.
 
 The quickstart uses a free quick tunnel: zero setup, but the URL changes each restart. When you want a
 **stable hostname** (so you set it in the studio once and forget it), create a free Cloudflare named
-tunnel and put its token in `.env` as `TUNNEL_TOKEN` -- the stack uses it automatically. A stable
-`LOCAL_BACKEND_TOKEN` (instead of the auto-generated one) goes in `.env` the same way.
+tunnel and switch the tunnel to it with a small `docker-compose.override.yml` next to the compose file
+(Docker Compose merges an override file automatically, so you never edit the tracked `docker-compose.yml`):
+
+```yaml
+services:
+  cloudflared:
+    command: ["tunnel", "run"]
+```
+
+Then put the named tunnel's token in `.env` as `TUNNEL_TOKEN` (cloudflared reads it automatically for
+`tunnel run`). A stable `LOCAL_BACKEND_TOKEN` (instead of the auto-generated one) goes in `.env` the
+same way.
 
 ### Sharing your GPU (cap the VRAM)
 

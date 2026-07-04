@@ -3,6 +3,39 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.1.1 -- 2026-07-04
+
+Fix the default quick-tunnel bring-up (compose + ready-banner fix; the render engine is unchanged).
+
+- **cloudflared no longer crash-loops on `docker compose up`.** The `cloudflared` service wrapped its
+  tunnel startup in an inline `sh -c` script, but the `cloudflare/cloudflared` image is distroless (no
+  shell) and its entrypoint is `cloudflared --no-autoupdate`, so the script was passed to cloudflared as
+  arguments and never ran; the default quick tunnel never started and the `ready` banner never printed a
+  Backend URL. The service now invokes cloudflared natively:
+  `tunnel --url http://vivijure-local-16gb:8000 --logfile /shared/cf.log`. No shell, no entrypoint override, no
+  dependence on the distroless image's contents.
+- **A one-shot `init-shared` service makes the shared volume writable by cloudflared's nonroot UID.**
+  `cloudflare/cloudflared` runs as nonroot (65532) and cannot create `/shared/cf.log` in the root-owned
+  shared volume, so `--logfile` failed with permission-denied and the banner got no URL. `init-shared`
+  (the app image, root) now runs to completion first (compose `service_completed_successfully`) and sets
+  `/shared` to sticky-world-writable (`chmod 1777`, the `/tmp` model), so nonroot cloudflared can create
+  its logfile while the sticky bit still protects root-owned files like the token. cloudflared itself
+  stays nonroot.
+- **The named tunnel is now a documented `docker-compose.override.yml`** (see HOMELABBER "A stable
+  address") instead of an automatic `.env` switch, because a shell-free static command cannot branch on
+  whether `TUNNEL_TOKEN` is set. The novice quick-tunnel path stays the tracked default.
+- **The ready banner reports the real tunnel state.** It shows the actual quick-tunnel URL whenever one
+  is live (regardless of whether `TUNNEL_TOKEN` is set), and prints the named-hostname line only when no
+  quick URL appears and `TUNNEL_TOKEN` is set, with a one-line hint so a partial config self-diagnoses.
+  Keeps "a degrade is never silent": the banner never claims a named hostname while a quick URL is live.
+
+Honest history: the 2026-06-18 switch of `cloudflare/cloudflared:latest` to a distroless nonroot base
+broke this compose tunnel service two ways at once -- it removed the shell the inline `sh -c` script
+needed, AND it dropped cloudflared to a nonroot UID (65532) that cannot write the root-owned `/shared`.
+Combined with the pre-existing entrypoint mismatch, the service was never functional via
+`docker compose up`; any tunnel URL in earlier proofs came from a hand-run cloudflared out-of-band.
+v0.1.1 addresses all three.
+
 ## v0.1.0 -- 2026-07-04
 
 First public release of the CogVideoX local render door: the studio's image-to-video motion engine
