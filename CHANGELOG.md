@@ -14,10 +14,13 @@ Fix the default quick-tunnel bring-up (compose + ready-banner fix; the render en
   Backend URL. The service now invokes cloudflared natively:
   `tunnel --url http://vivijure-local-16gb:8000 --logfile /shared/cf.log`. No shell, no entrypoint override, no
   dependence on the distroless image's contents.
-- **The backend pre-creates the tunnel logfile for cloudflared's nonroot UID.** `cloudflare/cloudflared`
-  runs as nonroot (65532) and cannot create `/shared/cf.log` in the root-owned shared volume, so
-  `--logfile` failed with permission-denied and the banner got no URL. The backend entrypoint (root) now
-  pre-creates `/shared/cf.log` owned by 65532; `/shared` stays root-owned and the token stays root-only.
+- **A one-shot `init-shared` service makes the shared volume writable by cloudflared's nonroot UID.**
+  `cloudflare/cloudflared` runs as nonroot (65532) and cannot create `/shared/cf.log` in the root-owned
+  shared volume, so `--logfile` failed with permission-denied and the banner got no URL. `init-shared`
+  (the app image, root) now runs to completion first (compose `service_completed_successfully`) and sets
+  `/shared` to sticky-world-writable (`chmod 1777`, the `/tmp` model), so nonroot cloudflared can create
+  its logfile while the sticky bit still protects root-owned files like the token. cloudflared itself
+  stays nonroot.
 - **The named tunnel is now a documented `docker-compose.override.yml`** (see HOMELABBER "A stable
   address") instead of an automatic `.env` switch, because a shell-free static command cannot branch on
   whether `TUNNEL_TOKEN` is set. The novice quick-tunnel path stays the tracked default.
