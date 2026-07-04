@@ -24,7 +24,7 @@ services:
     image: ghcr.io/skyphusion-labs/vivijure-local-16gb:latest
     pull_policy: missing
     entrypoint: ["sh", "-c"]
-    command: ["mkdir -p /shared && chmod 1777 /shared"]
+    command: ["mkdir -p /shared && chmod 1777 /shared && rm -f /shared/cf.log"]
     volumes:
       - vivijure_runtime:/shared
     restart: "no"
