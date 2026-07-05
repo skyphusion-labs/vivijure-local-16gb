@@ -142,6 +142,9 @@ walkthrough (tunnel, trade-offs, troubleshooting) is
 > **physical silicon** (a whole card passed through, not a slice). If your only option is a vGPU
 > slice, use the **[12GB LTX door](https://github.com/skyphusion-labs/vivijure-local-12gb)** instead:
 > it renders correctly on the very same vGPU hardware.
+>
+> The backend also DETECTS a vGPU slice at startup (from `nvidia-smi`) and prints a loud warning
+> in `docker compose logs` -- it warns, it does not refuse (if you know your setup differs, proceed).
 
 ## Configuration (`.env`)
 

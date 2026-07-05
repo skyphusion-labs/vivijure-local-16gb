@@ -3,6 +3,26 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.1.4 -- 2026-07-05
+
+vGPU honesty for the CogVideoX door (16gb#42, splitting the doc + runtime half out of #35). The render
+engine is unchanged.
+
+- **Boot-time GRID/vGPU-slice detection (#42).** CogVideoX-5B-I2V renders pure-noise, corrupt clips on a
+  mediated GRID/vGPU SLICE (e.g. an NVIDIA A16-xQ profile) while still reporting the job COMPLETED, with
+  no error -- confirmed deterministically across cloud boxes and every door version (#35). A whole-card
+  passthrough is fine; only the slice corrupts. The server now reads `nvidia-smi -q` at startup and, when
+  it detects a sliced vGPU, prints a loud warning naming the 12GB LTX door as the vGPU-tolerant option. It
+  WARNS, it does not fail: the operator may know better, and any ambiguous read (nvidia-smi absent,
+  non-zero exit, missing field) stays silent -- never a false positive. Detection lives in the
+  byte-identical shared core (`core/gpu_virt.py`, pure parse + a best-effort subprocess probe) and is
+  gated on a per-door seam (`door.VGPU_UNSUPPORTED`, read via getattr) so the vGPU-tolerant LTX (12GB)
+  door stays silent. Parse is unit-tested (GRID, bare-metal, passthrough, and missing-field shapes).
+- **README + HOMELABBER: the supported-hardware note now points at the boot warning.** The existing
+  "a real, dedicated GPU is required" note (v0.1.3) gains a line noting the backend also detects a slice
+  at startup and warns in `docker compose logs`.
+- **`__version__` bumped to 0.1.4.**
+
 ## v0.1.3 -- 2026-07-05
 
 Homelabber-facing hardening and docs honesty; the render engine is unchanged.
