@@ -15,3 +15,26 @@ def animate(*args, **kwargs):
     progress_cb) -> I2VResult` at CALL time (a live attribute lookup on the engine module, so tests can
     monkeypatch it; the engine module import is cheap, its torch/diffusers load stays deferred)."""
     return _engine.animate(*args, **kwargs)
+
+# vGPU honesty (16gb#42). This door engine (CogVideoX-5B-I2V) renders pure-noise, corrupt clips on a
+# mediated GRID/vGPU SLICE (e.g. an NVIDIA A16-xQ profile) while still reporting COMPLETED, with no error
+# -- confirmed deterministically across cloud boxes and every door version (16gb#35). A whole-card
+# PASSTHROUGH is fine; only the sliced vGPU corrupts. So this door declares itself vGPU-incompatible and
+# the server (core) WARNS loudly at boot when it detects a slice (warn, never fail: the operator may know
+# better). The sibling 12GB LTX door renders correctly on vGPU and does NOT set this flag, so the shared
+# core (which reads it via getattr, defaulting off) stays silent there.
+VGPU_UNSUPPORTED = True
+VGPU_WARNING = "\n".join([
+    "=" * 64,
+    f"  {SERVICE}: WARNING -- a GRID/vGPU-sliced GPU was detected.",
+    "",
+    "  This door engine (CogVideoX-5B-I2V) is KNOWN to produce CORRUPTED,",
+    "  pure-noise clips on a mediated vGPU slice (e.g. NVIDIA A16-xQ) while",
+    "  still reporting the job COMPLETED -- no error, just latent-noise frames.",
+    "",
+    "  Use a physical / whole-card passthrough GPU for this door. If a vGPU",
+    "  slice is your only option, run the 12GB LTX door instead -- it renders",
+    "  correctly on the very same hardware:",
+    "  https://github.com/skyphusion-labs/vivijure-local-12gb",
+    "=" * 64,
+])

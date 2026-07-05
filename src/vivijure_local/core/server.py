@@ -215,6 +215,35 @@ def apply_vram_cap(logger=None) -> float | None:
     return fraction
 
 
+# --------------------------------------------------------------------------- vGPU honesty (startup)
+
+def warn_if_sliced_vgpu(logger=None, detector=None) -> bool:
+    """Boot-time honesty guard (16gb#42): some door engines (CogVideoX) render pure-noise, corrupt clips
+    on a mediated GRID/vGPU SLICE while still reporting COMPLETED, with no error. If THIS door declares
+    itself vGPU-incompatible (`door.VGPU_UNSUPPORTED`) AND a sliced vGPU is detected, WARN LOUDLY -- but
+    NEVER fail: the operator may know better, and any ambiguous read stays silent (no false-positive).
+
+    Door-gated via getattr so the byte-identical core stays correct for the sibling door: the LTX (12GB)
+    door renders fine on vGPU and does not set the flag, so getattr(door, "VGPU_UNSUPPORTED", False) is
+    False there and this is a no-op. Whole-card passthrough is never flagged (only the slice corrupts).
+    Returns True iff it warned (so the proof + tests can assert on it)."""
+    from .. import door
+    if not getattr(door, "VGPU_UNSUPPORTED", False):
+        return False
+    from . import gpu_virt
+
+    detect = detector or gpu_virt.detect_virtualization_mode
+    if not gpu_virt.is_sliced_vgpu(detect()):
+        return False
+    log = logger or (lambda m: print(m, flush=True))
+    log(getattr(door, "VGPU_WARNING", None) or (
+        f"{SERVICE}: WARNING -- a GRID/vGPU-sliced GPU was detected; this door's engine is KNOWN to "
+        "produce corrupted (pure-noise) output on a vGPU slice while reporting success. Use a "
+        "physical / passthrough GPU."
+    ))
+    return True
+
+
 # --------------------------------------------------------------------------- HTTP shell
 
 def preflight_r2_or_exit(logger=None, *, sleep_s: float = 30.0) -> None:
@@ -262,6 +291,7 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
 
     preflight_r2_or_exit()  # novice-first: a plain, actionable message if R2 is unset (not a traceback)
     apply_vram_cap()  # honor VIVIJURE_MAX_VRAM_GB before anything can touch the GPU
+    warn_if_sliced_vgpu()  # 16gb#42: warn (never fail) if this door engine is on a corrupting vGPU slice
     expected_token = os.environ.get("LOCAL_BACKEND_TOKEN", "") or ""
     store = R2(R2Config.from_env())
     registry = JobRegistry(build_i2v_run_fn(store))

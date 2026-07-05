@@ -7,4 +7,4 @@ the unchanged control plane. The 16GB floor is PROVEN on real silicon (docs/proo
 exactly like LTX's 12GB proof. See docs/architecture.md.
 """
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
