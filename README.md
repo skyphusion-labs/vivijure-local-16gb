@@ -112,8 +112,12 @@ The `ready` service prints a banner with your **Backend URL + token**, copy-past
 render downloads the CogVideoX weights, ~22GB once, so it takes a good while longer; later renders
 skip the download.)
 
-**3. Paste that URL + token** into your Vivijure studio's "Local (your GPU)" door, pick it, and render.
-A real clip comes back from your own card. That is the whole setup -- no tunnel to configure.
+**3. Wire it into your studio.** Put that URL + token into your studio's `deploy.env` as
+`LOCAL_BACKEND_URL` and `LOCAL_BACKEND_TOKEN`, set `INSTALL_LOCAL_GPU=1`, and run `./deploy.sh`; it
+seeds the secrets, deploys the door module, and binds it to the core (see
+[docs/INTEGRATION.md](docs/INTEGRATION.md)). Then pick this door in the planner and render -- a real
+clip comes back from your own card. The door opens its own tunnel, so there is nothing to
+configure on the door side.
 
 > Forgot the R2 creds? The logs tell you exactly which values to set and to run `docker compose up`
 > again -- a plain message, not a stack trace.
