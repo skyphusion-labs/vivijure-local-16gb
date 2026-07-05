@@ -3,6 +3,30 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.1.3 -- 2026-07-05
+
+Homelabber-facing hardening and docs honesty; the render engine is unchanged.
+
+- **Compose no longer collides with another stack on the same host (#39).** The three services carried
+  fixed `container_name`s (`vivijure-cloudflared`, `vivijure-ready`, `vivijure-local-16gb`), which are
+  global per host: running this door next to a media stack that also names a container
+  `vivijure-cloudflared`, or next to the sibling 12GB door, aborted one stack. Dropped the explicit
+  names so Compose scopes them per project (`<project>-<service>-1`); inter-service DNS and
+  `docker compose logs <service>` are unchanged.
+- **Dockerfile no longer claims "NOT on RunPod" (#40).** A stale homelab-era comment; the pinned
+  cu124 / torch 2.5.1 stack is portable to any CUDA 12.x card, homelab consumer OR datacenter
+  secure-cloud pod.
+- **HOMELABBER troubleshooting: moving a door to a new R2 account (#41).** Added the self-diagnosis for
+  a `could not fetch keyframe ... (404)` after a door move: the door reads and writes against ITS OWN
+  `.env` R2, so re-wire `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` to
+  the new studio's bucket.
+- **INTEGRATION.md and README rewritten for an outside homelabber (#43).** The studio-wiring recipe
+  dropped the internal-CI framing (ci.yml EXCLUDE, PR #382, stale studio versions) for the real path
+  (set `INSTALL_LOCAL_GPU=1` plus `LOCAL_BACKEND_URL` and `LOCAL_BACKEND_TOKEN` in `deploy.env`, run
+  `./deploy.sh`), and README quickstart step 3 no longer references a "paste into the studio door" UI
+  that does not exist.
+- **`__version__` bumped to 0.1.3.**
+
 ## v0.1.2 -- 2026-07-04
 
 Ready-banner correctness after a restart, plus a bare-OS prerequisite-install guide. The render
