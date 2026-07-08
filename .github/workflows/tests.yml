@@ -33,3 +33,12 @@ jobs:
         run: python -m py_compile src/vivijure_local/*.py scripts/benchmark.py
       - name: Run the CPU suite
         run: pytest -q
+
+  ci:
+    name: ci
+    needs: [cpu-tests]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require cpu-tests
+        run: test "${{ needs.cpu-tests.result }}" = "success"
