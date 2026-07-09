@@ -252,6 +252,12 @@ One credential: the shared-R2 key (read the keyframe, write the clip). Input is 
 `LOCAL_BACKEND_TOKEN` is REQUIRED on every i2v request (the tunnel is public; an unconfigured token
 makes the i2v endpoint refuse to serve). The backend holds no studio secrets and no submitter identity.
 
+## Who this is for
+
+Homelab builders with a **16GB consumer GPU** who want higher-fidelity Vivijure image-to-video (CogVideoX-5B) locally without RunPod rent.
+
+**Vivijure Studio:** https://vivijure.com · **Welcome demo:** https://vivijure.skyphusion.org/welcome · **Skyphusion Labs:** https://skyphusion.org
+
 ## Support
 
 Questions, bugs, or ideas? Start with this repo's [GitHub Issues](../../issues); see
