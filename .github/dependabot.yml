@@ -20,6 +20,8 @@ updates:
       - dependency-name: "transformers"
       - dependency-name: "torch"
       - dependency-name: "torchvision"
+      # av 18.x drops py3.10 wheels; the door image is py3.10. Docker build breaks, CI cannot see it.
+      - dependency-name: "av"
 
   - package-ecosystem: "github-actions"
     directory: "/"
