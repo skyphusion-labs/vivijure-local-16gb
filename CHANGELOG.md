@@ -3,6 +3,29 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.2.0 -- 2026-07-10
+
+From-scratch homelabber onboarding: a dependency preflight and one tested bare-OS install path (the
+sibling of vivijure-local-12gb v0.2.0). The render engine is unchanged.
+
+- **`preflight.sh`: a dependency preflight that checks, never installs (#61).** Run it before
+  `docker compose up`. It checks the NVIDIA driver (present and >= the 550 floor, card visible), GPU
+  VRAM against this door's 16GB floor, Docker (installed and daemon up), the compose plugin, that a
+  `--gpus all` container can ACTUALLY see the GPU (the real NVIDIA Container Toolkit test, not just
+  "package installed"), and free disk. Each failed check names the exact HOMELABBER.md step that fixes
+  it and the script exits non-zero; it installs nothing (Conrad ruling: no auto-installers across
+  every package manager). **Door-specific:** it ships `WARN_ON_VGPU=1`, so it warns loudly on a
+  detected GRID/vGPU slice (which CogVideoX renders as pure noise while reporting success, #35/#42),
+  mirroring the runtime boot-warn in `core/gpu_virt.py`. Same shared preflight shape as the 12GB door,
+  differing only in the VRAM floor and the vGPU seam default (portable via `DRIVER_FLOOR` /
+  `VRAM_FLOOR_MIB` / `DISK_FLOOR_GB` / `WARN_ON_VGPU`).
+- **HOMELABBER.md is now one tested Ubuntu 24.04 LTS path (#61).** Added an "already have `nvidia-smi`
+  working? skip ahead" branch, a "Confirm your box is ready (preflight)" section, retired the stale
+  "we have not run a from-scratch driver install ourselves" caveat, and scoped the docs to the one
+  tested distro (other distros point at each project's official guide). README gains a from-scratch +
+  preflight pointer.
+- **`__version__` bumped to 0.2.0.**
+
 ## v0.1.4 -- 2026-07-05
 
 vGPU honesty for the CogVideoX door (16gb#42, splitting the doc + runtime half out of #35). The render

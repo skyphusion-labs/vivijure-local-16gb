@@ -31,14 +31,20 @@ the ~22GB weights). That's it.
 > in `docker compose logs` -- it warns, it does not refuse (if you know your setup differs, proceed).
 
 Starting from a fresh Ubuntu box with none of these installed yet? Do **Install the prerequisites**
-just below first, then come back to the R2 step and the run.
+just below first, then come back to the R2 step and the run. **Already have `nvidia-smi` working and
+Docker running?** Skip the install and jump to the
+[preflight check](#confirm-your-box-is-ready-preflight) to confirm the rest, then do the R2 step.
 
-### Install the prerequisites (Ubuntu 22.04 / 24.04)
+### Install the prerequisites (Ubuntu 24.04 LTS)
 
-You do this ONCE per box. Copy each block, run it, and check the "you should see" line before moving on.
-The commands below follow each project's official install guide (cited under each step); we have not
-run a from-scratch driver install on bare metal ourselves, so if a command changed upstream, the linked
-guide is the source of truth. On a non-Ubuntu distro, use the same three guides for your package manager.
+One tested path, start to finish: **Ubuntu 24.04 LTS.** You do this ONCE per box. Copy each block, run
+it, and check the "you should see" line before moving on. These follow each project's official install
+guide (linked under each step, and the source of truth if a command changes upstream) and are the same
+shape we use to bring up a fresh NVIDIA GPU box on bare-metal Ubuntu 24.04. On Ubuntu 22.04 the same
+commands generally work (the driver step may pick an older branch; see the note in step 1). On a
+non-Ubuntu distro, use each project's official guide for your package manager -- we test one path, not a
+matrix. When you're done, run `./preflight.sh` (below) to confirm every piece is in place -- on this
+door it also flags a vGPU slice, which CogVideoX cannot render on.
 
 **1. NVIDIA driver (550 or newer).** The distro-standard route picks the recommended driver for your
 card:
@@ -127,6 +133,26 @@ You should see the SAME GPU table as step 1, but printed from INSIDE a container
 prerequisite is in place and you are ready to run vivijure.
 (Source: NVIDIA "Installing the NVIDIA Container Toolkit" -- https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
 
+### Confirm your box is ready (preflight)
+
+Not sure every piece is in place? From the repo, run the preflight. It **checks** every prerequisite and
+tells you exactly what to fix; it installs nothing and changes nothing on your system:
+
+```sh
+git clone https://github.com/skyphusion-labs/vivijure-local-16gb
+cd vivijure-local-16gb
+./preflight.sh
+```
+
+It checks: your NVIDIA driver (version, and that the card is visible), that Docker is installed and its
+daemon is running, the compose plugin, that a container can actually see your GPU (the real toolkit
+test, not just "is the package installed"), your GPU's VRAM against this door's 16GB floor, and free
+disk. **On this door it also warns if your GPU is a GRID/vGPU slice**, which CogVideoX renders as
+pure noise while reporting success (see the vGPU callout above); use a physical / passthrough card, or
+the 12GB LTX door. Every failed check names the step above that fixes it, and the script exits
+non-zero; **all green (a vGPU warning is not a hard failure) means you're ready** for the R2 step and
+`docker compose up`.
+
 ONE setup step before you start: your Vivijure studio's Cloudflare R2 credentials (this backend shares
 that bucket -- it reads the keyframe and writes the finished clip there). Get them from the Cloudflare
 dashboard -> R2 -> Manage R2 API Tokens, scoped to your bucket.
@@ -141,6 +167,7 @@ shown once when you create the R2 API token.
 ```sh
 git clone https://github.com/skyphusion-labs/vivijure-local-16gb
 cd vivijure-local-16gb
+./preflight.sh    # recommended: checks every prerequisite (installs nothing); all green -> go
 cp .env.example .env
 # edit .env: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (R2_BUCKET defaults to "vivijure")
 docker compose up

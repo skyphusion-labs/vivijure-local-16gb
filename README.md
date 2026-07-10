@@ -79,6 +79,11 @@ The full map, the same one every constellation repo shows, and how to read it, i
 
 ## Quickstart (your first run)
 
+New box with nothing installed yet? Follow the from-scratch prerequisites (NVIDIA driver, Docker, the
+NVIDIA Container Toolkit; one tested path, Ubuntu 24.04 LTS) in
+**[docs/HOMELABBER.md](docs/HOMELABBER.md)**, then run `./preflight.sh` to confirm your box is ready
+(it checks everything, installs nothing, and flags a vGPU slice this door cannot render on).
+
 You need **one** thing before you start: your Vivijure studio's **Cloudflare R2 credentials**. This
 backend shares that bucket -- it reads the keyframe and writes the finished clip there. Everything else
 (the tunnel, the access token) is automatic.
