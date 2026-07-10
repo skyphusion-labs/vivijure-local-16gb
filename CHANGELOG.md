@@ -3,6 +3,16 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.2.1 -- 2026-07-10
+
+Publish build fix; the render engine is unchanged.
+
+- **Re-pin `av` to 17.1.0 (GHCR build fix).** Dependabot's 17.1.0 -> 18.0.0 bump broke the image
+  build: av 18 ships no Python 3.10 wheels and the door image builds on py3.10. CI never builds the
+  Docker image, so the bump passed green and the v0.2.0 publish was the first build to hit it.
+  Dependabot now ignores `av` (bump only together with a base-image Python move).
+- **`__version__` bumped to 0.2.1.**
+
 ## v0.2.0 -- 2026-07-10
 
 From-scratch homelabber onboarding: a dependency preflight and one tested bare-OS install path (the
