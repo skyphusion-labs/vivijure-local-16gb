@@ -3,6 +3,18 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.2.2 -- 2026-07-11
+
+Fix: `/cancel` now actually aborts a running render (#70, PR #71).
+
+- The engine step callback swallowed ALL exceptions (`except Exception: pass`), including the
+  `core.jobs.Cancelled` signal the job registry raises to abort a render between denoise steps. So
+  `POST /cancel` returned `{ok: true}` while the denoise ran to completion and shipped a full clip --
+  a silent no-op (and a silent-degrade violation). The callback now re-raises `Cancelled` and swallows
+  only genuine progress-reporting errors, so a cancel aborts the denoise at the next step. Hermetic
+  tests assert a `Cancelled` raised in the step callback aborts the denoise loop (RED->GREEN). Same
+  defect + fix as the sibling 12gb door v0.3.1.
+
 ## v0.2.1 -- 2026-07-10
 
 Publish build fix; the render engine is unchanged.
