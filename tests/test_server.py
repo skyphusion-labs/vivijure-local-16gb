@@ -244,3 +244,21 @@ def test_validate_offload_exits_with_plain_message_when_invalid(monkeypatch):
     blob = "\n".join(logs)
     assert "VIVIJURE_OFFLOAD" in blob and "invalid" in blob
     assert "Traceback" not in blob  # a plain, actionable message, never a stack trace
+
+
+# --- /health duration_grid (#707): the door declares its clip-length grid ------------------------------
+
+def test_health_declares_duration_grid_matching_the_tier_clamps():
+    from vivijure_local.config import EXPORT_FPS, QualityTier, tier_config
+    code, body = route("GET", "/health", None, registry=_reg(), token=None, expected_token=TOK)
+    assert code == 200
+    grid = body.get("duration_grid")
+    assert grid is not None, "the CogVideoX door must declare a duration_grid"
+    # fps + per-tier max_frames come from the SAME config the clamps use (no second source of truth)
+    assert grid["fps"] == EXPORT_FPS
+    expected = {t.value: {"max_frames": tier_config(t).max_frames} for t in QualityTier}
+    assert grid["tiers"] == expected
+    # concretely (the #707 ruling values)
+    assert grid["tiers"]["draft"]["max_frames"] == 25
+    assert grid["tiers"]["standard"]["max_frames"] == 49
+    assert grid["tiers"]["final"]["max_frames"] == 49

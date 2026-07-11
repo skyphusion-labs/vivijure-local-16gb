@@ -61,6 +61,11 @@ class Offload(str, Enum):
 # offload mode + real VRAM floor are pinned by the card benchmark (docs/proof/RESULTS.md, Milestone 2).
 COGVIDEOX_5B_I2V = "THUDM/CogVideoX-5b-I2V"
 
+# The FIXED export cadence for CogVideoX-5B-I2V: its frames ARE 8 fps frames (the model is trained
+# at 8 fps and pinned there), so this is the single source both from_request and the /health
+# duration_grid (#707) read -- no second copy of the number.
+EXPORT_FPS = 8
+
 
 @dataclass(frozen=True)
 class TierConfig:
@@ -187,7 +192,7 @@ class I2VConfig:
         # to 8 and ignore a higher requested fps. A shared local-gpu module may default fps=24 (the LTX
         # door cadence); exporting CogVideoX's 49 frames at 24fps would play about 3x too fast. Honest
         # to the model: the knob cannot change what cadence the frames were generated for.
-        fps = 8
+        fps = EXPORT_FPS
         flow_shift = _coerce_float(cfg.get("flow_shift"), 5.0)
         # Operator offload override (VIVIJURE_OFFLOAD): when set it replaces this tier default for
         # EVERY tier; unset keeps the per-tier default byte-for-byte (16gb#74).
