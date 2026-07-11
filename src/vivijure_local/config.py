@@ -111,6 +111,40 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+# Operator override for the diffusers offload mode (16gb#74). UNSET (the default) keeps each tier
+# hardcoded, consumer-card-safe strategy byte-for-byte -- no behavior change. A big-VRAM operator can set
+# VIVIJURE_OFFLOAD=none to run the model RESIDENT (no per-step CPU paging, faster) or =sequential for the
+# low-VRAM fallback; when set it applies to EVERY tier. An INVALID value is a LOUD startup failure
+# (server.validate_offload_or_exit), never a silent default -- a fat-fingered knob must surface at boot,
+# not as a slow or OOM run later.
+OFFLOAD_ENV = "VIVIJURE_OFFLOAD"
+
+
+def parse_offload_override(raw: object) -> "Offload | None":
+    """Parse a VIVIJURE_OFFLOAD value to an Offload override, or None when unset/blank (keep the tier
+    default). Pure + CPU-only. Raises ValueError on a non-empty value that is not a valid mode, so the
+    operator learns at startup instead of silently getting the per-tier default."""
+    if raw is None:
+        return None
+    s = str(raw).strip().lower()
+    if not s:
+        return None
+    try:
+        return Offload(s)
+    except ValueError:
+        valid = ", ".join(o.value for o in Offload)
+        raise ValueError(
+            f"{OFFLOAD_ENV}={raw!r} is not a valid offload mode; use one of: {valid} "
+            "(or leave it unset to keep each tier default)"
+        ) from None
+
+
+def offload_override() -> "Offload | None":
+    """The active VIVIJURE_OFFLOAD override read from the environment (None when unset). Raises
+    ValueError on an invalid value; the server validates it loudly at startup."""
+    return parse_offload_override(os.environ.get(OFFLOAD_ENV))
+
+
 @dataclass(frozen=True)
 class I2VConfig:
     """The per-shot i2v config the server hands the engine: a tier baseline with the caller's clamped
@@ -155,10 +189,14 @@ class I2VConfig:
         # to the model: the knob cannot change what cadence the frames were generated for.
         fps = 8
         flow_shift = _coerce_float(cfg.get("flow_shift"), 5.0)
+        # Operator offload override (VIVIJURE_OFFLOAD): when set it replaces this tier default for
+        # EVERY tier; unset keeps the per-tier default byte-for-byte (16gb#74).
+        override = offload_override()
+        offload = override if override is not None else base.offload
         return cls(
             tier=t, model=base.model, steps=base.steps, guidance_scale=base.guidance_scale,
             width=width, height=height, num_frames=num_frames, fps=fps, seed=seed,
-            flow_shift=flow_shift, offload=base.offload, vae_tiling=base.vae_tiling,
+            flow_shift=flow_shift, offload=offload, vae_tiling=base.vae_tiling,
             negative_prompt=str(cfg.get("negative_prompt") or ""),
         )
 
