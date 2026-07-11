@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from vivijure_local.core.jobs import JobRegistry
-from vivijure_local.core.server import apply_vram_cap, build_i2v_run_fn, route, token_error
+from vivijure_local.core.server import apply_vram_cap, build_i2v_run_fn, route, token_error, validate_offload_or_exit
 
 TOK = "s3cret-token"
 
@@ -214,3 +214,33 @@ def test_token_compare_rejects_equal_length_wrong_token():
     # Timing-safe compare (hmac.compare_digest) still rejects a same-length wrong token as 401.
     assert token_error("s3cret-tokeX", TOK)[0] == 401
     assert token_error(TOK, TOK) is None
+
+
+# --- VIVIJURE_OFFLOAD startup guard (16gb#74 / 12gb#91) --------------------------------------------
+
+def test_validate_offload_is_a_noop_when_unset(monkeypatch):
+    monkeypatch.delenv("VIVIJURE_OFFLOAD", raising=False)
+    logs = []
+    assert validate_offload_or_exit(logger=logs.append) is None
+    assert logs == []  # silent when unset (each tier keeps its default)
+
+
+def test_validate_offload_accepts_a_valid_mode_and_logs(monkeypatch):
+    from vivijure_local.config import Offload
+    monkeypatch.setenv("VIVIJURE_OFFLOAD", "none")
+    logs = []
+    assert validate_offload_or_exit(logger=logs.append) is Offload.NONE
+    assert any("VIVIJURE_OFFLOAD" in m and "none" in m for m in logs)  # operator sees the active mode
+
+
+def test_validate_offload_exits_with_plain_message_when_invalid(monkeypatch):
+    # A bad value must fail loud at startup (plain message + SystemExit(1)), never silently default.
+    import pytest
+    monkeypatch.setenv("VIVIJURE_OFFLOAD", "resident")
+    logs = []
+    with pytest.raises(SystemExit) as ei:
+        validate_offload_or_exit(logger=logs.append, sleep_s=0)
+    assert ei.value.code == 1
+    blob = "\n".join(logs)
+    assert "VIVIJURE_OFFLOAD" in blob and "invalid" in blob
+    assert "Traceback" not in blob  # a plain, actionable message, never a stack trace

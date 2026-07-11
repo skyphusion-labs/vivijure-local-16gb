@@ -72,6 +72,23 @@ Copy `.env.example` to `.env` and fill these in. Only the R2 keys are required.
   card, leave it blank: the full 49-frame tiers need the whole card. A number as big as or bigger than
   your card is the same as leaving it blank.
 
+### `VIVIJURE_OFFLOAD`
+- **What it is:** how the render trades speed for graphics memory (VRAM). Three modes:
+  `none` (keep the whole model resident on the GPU: fastest, no per-step shuffling, but needs a big
+  card), `model` (page whole pieces of the model to system RAM between uses: the consumer-card
+  default), `sequential` (page piece-by-piece: slowest, smallest footprint, the low-VRAM fallback).
+- **Why:** on a big card (roughly 20GB or more) the default `model` mode is leaving speed on the table --
+  it shuffles the model on and off the GPU every step even though the card could hold it all. Setting
+  `none` runs the model resident and skips that shuffling, so each clip renders faster.
+- **Required?** No.
+- **Default:** blank, which keeps each quality tier own safe setting (`model` on this door). Nothing
+  changes unless you set this.
+- **Applies to:** every tier at once (draft, standard, final).
+- **Example:** `VIVIJURE_OFFLOAD=none` on a 20GB+ card renders resident (faster). On a 16GB card leave
+  it blank -- the full 49-frame tiers do not fit resident and would run out of memory.
+- **Bad value:** the backend refuses to start and tells you the valid modes, rather than quietly using
+  the default. Fix the value (or unset it) and start again.
+
 ---
 
 ## 2. Built-in settings (set for you in `docker-compose.yml`)

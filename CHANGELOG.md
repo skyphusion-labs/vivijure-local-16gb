@@ -3,6 +3,23 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.3.0 -- 2026-07-12
+
+Feature: `VIVIJURE_OFFLOAD` operator knob to pick the diffusers offload mode (#74).
+
+- A big-VRAM operator can now run CogVideoX-5B RESIDENT on the card instead of being forced through
+  per-step model-CPU-offload. Set `VIVIJURE_OFFLOAD=none` (whole model resident, fastest, needs a big
+  card, roughly 20GB+), `=model` (page whole pieces to CPU: the consumer-card default), or
+  `=sequential` (per-layer paging: the low-VRAM fallback). When set it applies to EVERY tier.
+- UNSET (the default) keeps each tier hardcoded offload byte-for-byte, so an existing install is
+  UNCHANGED -- no behavior change unless the operator opts in.
+- An invalid value FAILS LOUD at startup with the valid list, never a silent default (the honesty rule).
+- The engine already had the resident path (`pipe.to("cuda")`); this wires the env override into
+  `config.from_request` and validates it at boot (`server.validate_offload_or_exit`). Hermetic CPU
+  tests cover the parse, the per-tier override, the unset==default guarantee, and the startup guard.
+- The fastest offload mode that fits a given card is card-dependent (docs/live-benchmark-plan.md); the
+  16GB tiers still fit only under `model`, `none` is for the 20GB+ operator.
+
 ## v0.2.2 -- 2026-07-11
 
 Fix: `/cancel` now actually aborts a running render (#70, PR #71).

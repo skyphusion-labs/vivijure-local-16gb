@@ -282,6 +282,40 @@ def preflight_r2_or_exit(logger=None, *, sleep_s: float = 30.0) -> None:
     raise SystemExit(1)
 
 
+# --------------------------------------------------------------------------- offload override (startup)
+
+def validate_offload_or_exit(logger=None, *, sleep_s: float = 30.0):
+    """Startup guard for VIVIJURE_OFFLOAD (16gb#74 / 12gb#91): validate the operator offload override
+    BEFORE the socket binds, so a fat-fingered value fails loud HERE instead of silently falling back to
+    the per-tier default (or surfacing later as a slow / OOM run). Unset => None (every tier keeps its
+    hardcoded, consumer-card-safe offload). A valid value is logged so the operator can see which mode is
+    active for every tier. An INVALID value prints a plain, actionable message and exits (never a
+    traceback), matching preflight_r2_or_exit. Returns the resolved override (or None) on success."""
+    import time
+
+    from .. import config
+
+    log = logger or (lambda m: print(m, flush=True))
+    try:
+        override = config.offload_override()
+    except ValueError as e:
+        line = "=" * 68
+        log("\n".join([
+            "", line,
+            f"  {SERVICE}: your {config.OFFLOAD_ENV} setting is invalid; refusing to start.",
+            "",
+            f"    {e}",
+            "",
+            "  FIX: unset it to keep each tier default, or set one of the listed modes.",
+            line, "",
+        ]))
+        time.sleep(sleep_s)  # readable under restart: unless-stopped (no tight crash-loop)
+        raise SystemExit(1) from None
+    if override is not None:
+        log(f"{SERVICE}: offload override active -- {config.OFFLOAD_ENV}={override.value} (all tiers)")
+    return override
+
+
 def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
     """Wire R2 + the door's engine + the registry and serve. The store + registry build BEFORE the
     socket binds so a misconfig fails loud at startup, not mid-render."""
@@ -291,6 +325,7 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
 
     preflight_r2_or_exit()  # novice-first: a plain, actionable message if R2 is unset (not a traceback)
     apply_vram_cap()  # honor VIVIJURE_MAX_VRAM_GB before anything can touch the GPU
+    validate_offload_or_exit()  # 16gb#74/12gb#91: fail loud on a bad VIVIJURE_OFFLOAD, never silently default
     warn_if_sliced_vgpu()  # 16gb#42: warn (never fail) if this door engine is on a corrupting vGPU slice
     expected_token = os.environ.get("LOCAL_BACKEND_TOKEN", "") or ""
     store = R2(R2Config.from_env())
