@@ -170,3 +170,33 @@ def test_apply_offload_warns_when_the_strategy_does_not_apply(capsys):
     eng._apply_offload(BarePipe(), cfg)
     err = capsys.readouterr().err
     assert "did not apply" in err                 # offload is the fit; silence would mask an OOM
+
+
+def test_step_callback_propagates_cancelled_to_abort_denoise():
+    # A /cancel sets the job flag; the run_fn progress_cb raises core.jobs.Cancelled. The engine step
+    # callback MUST let it propagate so the denoise loop aborts (#70 -- it was swallowed before the fix,
+    # which made /cancel a silent no-op that ran the render to completion and shipped a clip).
+    import pytest
+    from vivijure_local.core.jobs import Cancelled
+
+    def progress_cb(step, total):
+        if step >= 3:
+            raise Cancelled()
+
+    cb = eng._step_callback(progress_cb, 10)
+    steps = 0
+    with pytest.raises(Cancelled):
+        for i in range(10):  # stand-in for the diffusers denoise loop calling the step callback per step
+            steps += 1
+            cb(pipe=None, step_index=i, timestep=None, callback_kwargs={})
+    assert steps == 3  # aborted at the cancel step; it did NOT run all 10 denoise steps
+
+
+def test_step_callback_swallows_progress_errors_but_not_cancel():
+    # A non-cancel progress error stays best-effort: it must NOT break a valid render.
+    def progress_cb(step, total):
+        raise ValueError("progress sink hiccup")
+
+    cb = eng._step_callback(progress_cb, 10)
+    out = cb(pipe=None, step_index=2, timestep=None, callback_kwargs={"latents": 42})
+    assert out == {"latents": 42}  # swallowed; the denoise continues, callback_kwargs passed through
