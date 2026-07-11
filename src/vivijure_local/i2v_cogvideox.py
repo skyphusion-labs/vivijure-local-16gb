@@ -252,13 +252,19 @@ def _try(obj, name: str, *args) -> bool:
 
 def _step_callback(progress_cb, total: int):
     """Wrap a `(step, total)` callback in diffusers' callback_on_step_end signature. Returns None when
-    there is no callback (zero overhead). Best-effort: a progress failure never breaks the denoise."""
+    there is no callback (zero overhead). Best-effort for PROGRESS reporting only -- a progress failure
+    never breaks the denoise -- but the cooperative-cancel signal (core.jobs.Cancelled) MUST propagate so
+    a /cancel actually aborts the denoise between steps (#70); swallowing it made cancel a silent no-op."""
     if progress_cb is None:
         return None
+
+    from .core.jobs import Cancelled  # cooperative-cancel signal; MUST propagate so /cancel aborts denoise (#70)
 
     def on_step_end(pipe, step_index, timestep, callback_kwargs):
         try:
             progress_cb(step_index + 1, total)
+        except Cancelled:
+            raise  # cooperative cancel (#70): abort the denoise loop, never swallow the signal
         except Exception:
             pass
         return callback_kwargs
