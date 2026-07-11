@@ -1,0 +1,33 @@
+name: docker-build-smoke
+
+# Build-only smoke for the consumer-door image. Catches dependency/Dockerfile changes that the CPU
+# pytest suite never exercises (lesson from v0.2.0 av pin). No push, no GPU. Fork-safe ubuntu-latest.
+
+on:
+  pull_request:
+    paths:
+      - requirements.txt
+      - deploy/Dockerfile
+      - .github/workflows/docker-build-smoke.yml
+  push:
+    branches: [main]
+    paths:
+      - requirements.txt
+      - deploy/Dockerfile
+      - .github/workflows/docker-build-smoke.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-build-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-build-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build door image (smoke only)
+        run: docker build -f deploy/Dockerfile -t vivijure-local-16gb-smoke:ci .
