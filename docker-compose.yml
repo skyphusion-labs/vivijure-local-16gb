@@ -128,6 +128,10 @@ services:
     volumes:
       - vivijure_runtime:/shared
     command: ["python3", "-m", "vivijure_local.core.announce"]
+    # Reuses the door image but never serves :8000; disable the inherited image HEALTHCHECK so
+    # `docker compose ps` does not show a false unhealthy on a working install (issue #67).
+    healthcheck:
+      disable: true
 
 volumes:
   vivijure_models:
