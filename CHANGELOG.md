@@ -3,6 +3,30 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.4.0 -- 2026-07-12
+
+Root fix for the `/status` stall (#77, the door half of vivijure#719), plus corrected offload guidance
+(#79). Both ship in this tag.
+
+- **Render isolated in a worker subprocess (#77).** The door served HTTP from a `ThreadingHTTPServer`
+  whose `/status` handler thread shared the GIL with the in-process render; each CogVideoX sampler step
+  holds the GIL ~6.4s in a single C-level torch call, so a poll landing in that window stalled ~6.4s and
+  timed out on a HEALTHY render. The render now runs in a persistent worker SUBPROCESS
+  (`core/render_worker.py`) driven by the HTTP process over a small newline-JSON IPC protocol
+  (`core/worker_client.py`); the HTTP process blocks off-GIL, so `/status` stays sub-second at every
+  percentile. Live-proven on the 20GiB standing-door card: `/status` p99 dropped from ~6166 ms to
+  **1.1 ms** (max 3.7 ms) across 2876 polls during a completed standard render
+  (`docs/proof/SUBPROCESS-S38.md`). The `/status`, `/cancel`, and `i2v_clip` contracts are
+  byte-identical; the worker keeps the model warm (only the first job loads it); cancel is terminate +
+  respawn (process death reclaims all CUDA/VRAM); a worker crash fails the job honestly instead of
+  hanging; `apply_vram_cap` now runs in the worker (the process that loads the model). No API change
+  (MINOR for the architecture change).
+- **Offload-knob guidance corrected on real 24GB/48GB silicon (#79).** `VIVIJURE_OFFLOAD=none` needs a
+  >28GB card (measured 28436 MiB whole-model-resident high-water mark on an A40); it OOMs on 24GB and
+  20GiB, and on a 48GB card buys only a near-constant ~17-18s/clip (~4-14%). The shipped default
+  (unset = `model`) stays correct for every card this door targets. Full bench:
+  `docs/proof/OFFLOAD-S38.md`. Supersedes the earlier "20GB+ is enough" estimate; no engine change.
+
 ## v0.3.1 -- 2026-07-12
 
 Feature: the door declares its duration grid on `/health` (#707).
