@@ -38,3 +38,17 @@ VGPU_WARNING = "\n".join([
     "  https://github.com/skyphusion-labs/vivijure-local-12gb",
     "=" * 64,
 ])
+
+# Duration grid (#707): this door is the DECLARING SOURCE for the clip lengths it can produce, so the
+# control plane preflights a storyboard against the card real limits (read off /health) instead of
+# guessing. Values are DERIVED from the SAME config the clamps use (tier_config max_frames + the pinned
+# EXPORT_FPS) -- exactly one source of truth. CogVideoX-5B-I2V is a fixed 8 fps model with a per-tier
+# frame ceiling; the sibling 12GB LTX door has no fixed grid and omits this block entirely (its absence
+# on /health means "no declared constraint"). The shared core reads it via getattr, so the byte-identical
+# server stays correct for both doors.
+from .config import EXPORT_FPS, QualityTier, tier_config  # noqa: E402
+
+DURATION_GRID = {
+    "fps": EXPORT_FPS,
+    "tiers": {t.value: {"max_frames": tier_config(t).max_frames} for t in QualityTier},
+}

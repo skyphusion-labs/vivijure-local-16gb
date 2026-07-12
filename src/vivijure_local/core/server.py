@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Callable
 
 from .. import __version__
+from .. import door
 from ..door import ENGINE, SERVICE, animate
 from .contract import I2VClipRequest, clip_key_for, keyframe_key_for
 from .jobs import Cancelled, JobRegistry
@@ -65,7 +66,11 @@ def route(
     I/O of its own (the registry's run_fn does the work on its worker thread), so it unit-tests
     directly. Mirrors the RunPod envelope the local-gpu module expects."""
     if method == "GET" and path == "/health":
-        return 200, {"ok": True, "service": SERVICE, "version": version, "engine": ENGINE}
+        health = {"ok": True, "service": SERVICE, "version": version, "engine": ENGINE}
+        grid = getattr(door, "DURATION_GRID", None)  # #707: door-declared duration grid; absent = no fixed grid
+        if grid is not None:
+            health["duration_grid"] = grid
+        return 200, health
 
     if method == "POST" and path == "/run":
         payload = (body or {}).get("input", body or {})
