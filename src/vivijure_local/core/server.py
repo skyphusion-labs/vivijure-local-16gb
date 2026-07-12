@@ -116,7 +116,7 @@ def route(
 
 # --------------------------------------------------------------------------- the i2v run_fn (GPU side)
 
-def build_i2v_run_fn(store, *, workdir: Path | None = None) -> Callable[[dict, Callable[[], bool]], dict]:
+def build_i2v_run_fn(store, *, workdir: Path | None = None, on_progress: Callable[[int, int], None] | None = None) -> Callable[[dict, Callable[[], bool]], dict]:
     """Build the registry's worker function: fetch the keyframe from R2, animate it with the door's
     engine, upload the clip, return a pointer-only result (the clip_key), mirroring vivijure-backend's
     run_i2v_clip_job. `store` is an R2-like object (get_file / put_file); injected so this tests with a
@@ -161,6 +161,11 @@ def build_i2v_run_fn(store, *, workdir: Path | None = None) -> Callable[[dict, C
             cfg = I2VConfig.from_request(req.config, tier=tier)
 
             def progress_cb(step: int, total: int) -> None:
+                if on_progress is not None:
+                    try:
+                        on_progress(step, total)
+                    except Exception:
+                        pass  # progress relay is best-effort; never break the render
                 if should_cancel():
                     raise Cancelled()
 
@@ -322,19 +327,35 @@ def validate_offload_or_exit(logger=None, *, sleep_s: float = 30.0):
 
 
 def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
-    """Wire R2 + the door's engine + the registry and serve. The store + registry build BEFORE the
-    socket binds so a misconfig fails loud at startup, not mid-render."""
+    """Wire the render-worker client + the registry and serve. The boot guards + the worker client
+    build BEFORE the socket binds so a misconfig fails loud at startup, not mid-render.
+
+    The render runs in a persistent SUBPROCESS (core/render_worker.py via core/worker_client.py), not on
+    this process's job thread: the door serves HTTP from a ThreadingHTTPServer whose /status handler
+    thread would otherwise share the GIL with the render, and each diffusers sampler step holds the GIL
+    ~6.4s in a single C call (16gb#77 / 12gb#94). Isolating the render in its own process keeps /status
+    sub-second at every percentile. This process stays pure stdlib on the request path -- torch, boto3,
+    and the VRAM cap all live in the worker (the process that actually loads the model)."""
+    import signal
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    from .r2 import R2, R2Config  # deferred: boto3 lives only in the GPU runtime image
+    from .worker_client import RenderWorkerClient
 
     preflight_r2_or_exit()  # novice-first: a plain, actionable message if R2 is unset (not a traceback)
-    apply_vram_cap()  # honor VIVIJURE_MAX_VRAM_GB before anything can touch the GPU
+    # NOTE: apply_vram_cap() now runs at render-worker startup (render_worker.main), the process that
+    # loads the model; the per-process VRAM cap is meaningless in this HTTP process, which never allocates.
     validate_offload_or_exit()  # 16gb#74/12gb#91: fail loud on a bad VIVIJURE_OFFLOAD, never silently default
     warn_if_sliced_vgpu()  # 16gb#42: warn (never fail) if this door engine is on a corrupting vGPU slice
     expected_token = os.environ.get("LOCAL_BACKEND_TOKEN", "") or ""
-    store = R2(R2Config.from_env())
-    registry = JobRegistry(build_i2v_run_fn(store))
+    client = RenderWorkerClient()
+
+    def run_fn(payload: dict, should_cancel: Callable[[], bool]) -> dict:
+        # Delegate the render to the persistent worker subprocess; this call BLOCKS waiting on the
+        # worker (releasing the GIL), so /status stays responsive throughout the render. Cancel = the client
+        # terminating + respawning the worker; a worker crash surfaces as an honest job failure.
+        return client.render(payload, should_cancel)
+
+    registry = JobRegistry(run_fn)
 
     class Handler(BaseHTTPRequestHandler):
         def _bearer(self) -> str | None:
@@ -372,11 +393,23 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
             pass
 
     httpd = ThreadingHTTPServer((host, port), Handler)
+
+    def _graceful(signum, _frame):
+        # SIGTERM is what `docker stop` and the watchdog send. Break serve_forever so the finally below
+        # runs and the worker is shut down cleanly (no orphaned process holding VRAM).
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, _graceful)
+
     print(f"{SERVICE} serving on {host}:{port} (engine={ENGINE})", flush=True)
     try:
         httpd.serve_forever()
+    except (KeyboardInterrupt, SystemExit):
+        pass
     finally:
+        httpd.server_close()
         registry.shutdown()
+        client.shutdown(graceful=True)  # send {"t":"shutdown"} + bounded terminate; never orphan a worker
 
 
 if __name__ == "__main__":
