@@ -64,11 +64,47 @@ IN_PROGRESS / COMPLETED / FAILED) means the `local-gpu` module's poll loop is a 
 `own-gpu`'s -- minimum new surface, maximum reuse of the proven #141 grace-window discipline.
 
 A consumer card runs ONE i2v job at a time (it cannot fit two pipelines), so the registry is a
-single-worker serial queue: extra submits wait IN_QUEUE. Cancel is best-effort + cooperative -- a
-queued job is dropped; a running job is flagged so the engine's progress callback aborts between
-denoise steps (a torch step is not externally interruptible). A box restart loses the in-memory job;
-the module's grace window then treats the resulting 404 as a real loss and fails the shot honestly,
-rather than polling a dead job forever.
+single-worker serial queue: extra submits wait IN_QUEUE. The render itself does NOT run in the HTTP
+process; it runs in a persistent worker subprocess (see the next section), so cancel is clean: a queued
+job is simply dropped, and a running job is cancelled by terminating the worker and respawning a fresh
+one, which reclaims all CUDA/VRAM cleanly (sub-second). A box restart loses the in-memory job; the
+module grace window then treats the resulting 404 as a real loss and fails the shot honestly, rather
+than polling a dead job forever.
+
+## The render runs in a worker subprocess (off the HTTP GIL)
+
+The HTTP server and the GPU render live in TWO processes, not one. The door serves HTTP from a
+`ThreadingHTTPServer`; if the render ran in that same process, every CogVideoX sampler step would hold
+the Python GIL in a single ~6.4s C-level torch call, so a `/status` poll landing in that window stalled
+~6.4s and the caller (cloudflared -> the module fetch) timed out on a HEALTHY render (vivijure#719 /
+16gb#77). The root fix (v0.4.0) moves the render into a persistent worker SUBPROCESS:
+
+```
+python3 -m vivijure_local.core.server         <- HTTP process: owns the job registry, answers /status
+        |  newline-JSON IPC over stdin/stdout
+python3 -m vivijure_local.core.render_worker   <- render process: model resident, runs the denoise
+```
+
+- `core/render_worker.py` is the child: it runs the SAME render body (fetch the keyframe from R2,
+  animate, upload the clip, return the pointer) the door always ran, but in its own process. It keeps
+  ONE model warm for its whole lifetime, so only its first job pays the load.
+- `core/worker_client.py` is the parent (HTTP) side: it drives the worker over a small newline-JSON
+  protocol and BLOCKS on a queue read while the worker renders. That blocking read RELEASES the GIL, so
+  `/status` (a lock-free registry read in the HTTP process) stays sub-second at every percentile,
+  regardless of where the sampler is in its step. Live-proven: `/status` p99 dropped from ~6166 ms to
+  1.1 ms (`docs/proof/SUBPROCESS-S38.md`).
+
+The subprocess boundary also makes two behaviors honest for free:
+
+- **Cancel = terminate + respawn.** Killing the worker process reclaims all CUDA/VRAM cleanly, unlike an
+  in-process cooperative cancel that would leave the pipeline resident.
+- **A worker crash fails the job honestly.** Worker death (an OOM SIGKILL, a segfault, a cold-start
+  import failure) is detected as an EOF from the worker and surfaces as a real job failure, never a hang.
+
+Two stdout-hygiene rules keep the protocol clean: the worker reserves fd 1 for the JSON protocol and
+redirects everything else (torch / tqdm / stray prints) to stderr BEFORE any heavy import, and the
+parent logs-and-skips any stdout line it cannot decode. This shared core stays byte-identical across
+both doors, so the LTX (12gb) door has the same process model.
 
 ## Module layout (mirrors vivijure-backend + the LTX door)
 
@@ -80,7 +116,9 @@ rather than polling a dead job forever.
 | `core/vram.py` | a pure, conservative VRAM budgeter: does a config fit the card, and which offload it needs |
 | `i2v_cogvideox.py` | the CogVideoX engine: pure frame/dimension math (4k+1, /16) + the deferred-torch `animate` body |
 | `core/jobs.py` | the in-process async job registry (the RunPod-lifecycle stand-in) |
-| `core/server.py` | the RunPod-compatible HTTP server (pure `route()` + a stdlib http shell) + the i2v run_fn |
+| `core/server.py` | the RunPod-compatible HTTP server (pure `route()` + a stdlib http shell); its i2v run_fn drives the render worker over IPC instead of rendering in-process |
+| `core/worker_client.py` | the parent-side IPC client: spawns + drives the render worker, blocks off-GIL while it renders, detects worker death |
+| `core/render_worker.py` | the render worker subprocess: the deferred-torch render body, model kept warm, isolated from the HTTP GIL |
 | `core/r2.py` | minimal shared-bucket object I/O (the one credential the backend holds) |
 
 ## Shared core with the sibling door (vivijure_local.core -- extracted)

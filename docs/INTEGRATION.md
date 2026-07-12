@@ -149,3 +149,10 @@ For **beat-sync and audio alignment**, treat a local-16gb clip as a fixed ~3.1s 
 and lay audio / music cuts against the REALIZED length (`output.seconds` in the job result), never
 against the requested seconds. The datacenter door and the LTX door do not share this ceiling, so a film
 that mixes doors will have per-shot lengths that differ by backend -- plan the cut list accordingly.
+
+**The door advertises this grid on `/health`.** `GET /health` returns an additive `duration_grid`
+block (`{"fps": 8, "tiers": {"draft": {"max_frames": 25}, "standard": {"max_frames": 49}, "final":
+{"max_frames": 49}}}`), derived from the same tier config the per-clip clamps use, so the control plane
+can preflight a storyboard against this card's real ceiling instead of guessing. The sibling LTX (12gb)
+door omits the block by design (absence = no declared constraint), so a studio treats a door with no
+`duration_grid` as unconstrained.
