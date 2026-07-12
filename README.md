@@ -162,6 +162,7 @@ Copy `.env.example` to `.env` and fill it in. Every setting is an environment va
 | `LOCAL_BACKEND_TOKEN` | no | auto-generated | The bearer token every i2v request must carry (the tunnel is public). Blank => a strong one is generated and printed in the banner; set it for a stable token across restarts. |
 | `TUNNEL_TOKEN` | no | quick tunnel | A Cloudflare named-tunnel token for a STABLE hostname (also needs the `docker-compose.override.yml` from HOMELABBER "A stable address"). Blank => a zero-config TryCloudflare quick tunnel (URL changes each restart). |
 | `VIVIJURE_MAX_VRAM_GB` | no | full card | Cap the VRAM vivijure claims, in GB, when you share the card with other workloads. The backend pins torch to that fraction of the card at startup. Blank (or a value >= your card's size) => use the whole card. On a 16GB card, leave it blank -- the full 49-frame tiers need the whole card. |
+| `VIVIJURE_OFFLOAD` | no | blank (`model`) | How the render trades speed for VRAM. Blank keeps the safe default (`model`: evict the big text encoder between uses). `none` holds the whole model resident (faster by ~17-18s/clip) but the model is **~28GB resident (measured)**, so set it ONLY on a **>28GB card** (32GB+, i.e. 48GB-class); on 24GB or below it OOMs every tier. Proof: [docs/proof/OFFLOAD-S38.md](docs/proof/OFFLOAD-S38.md). |
 
 The full reference -- every `.env` value, every built-in setting, the ports, the volumes, and the
 per-clip settings the Studio sends -- is in **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**. You
