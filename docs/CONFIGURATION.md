@@ -74,21 +74,25 @@ Copy `.env.example` to `.env` and fill these in. Only the R2 keys are required.
 
 ### `VIVIJURE_OFFLOAD`
 - **What it is:** how the render trades speed for graphics memory (VRAM). Three modes:
-  `none` (keep the whole model resident on the GPU: fastest, no per-step shuffling, but needs a big
-  card), `model` (page whole pieces of the model to system RAM between uses: the consumer-card
-  default), `sequential` (page piece-by-piece: slowest, smallest footprint, the low-VRAM fallback).
-- **Why:** on a big card (roughly 20GB or more) the default `model` mode is leaving speed on the table --
-  it shuffles the model on and off the GPU every step even though the card could hold it all. Setting
-  `none` runs the model resident and skips that shuffling, so each clip renders faster.
+  `none` (keep the whole model resident on the GPU: fastest, but needs a big card), `model` (evict the
+  big text encoder to system RAM after it runs, keeping on the GPU only what the denoise loop needs: the
+  consumer-card default), `sequential` (page piece-by-piece: slowest, smallest footprint, the low-VRAM
+  fallback).
+- **Why (measured, S38):** the whole model resident needs **more than 28GB** of VRAM (peak 28436 MiB,
+  measured on a 48GB card). On a card with that headroom, `none` is faster than the default `model` by a
+  near-constant ~17-18s per clip -- that is the one-time cost `model` pays to evict the ~11GB T5-XXL text
+  encoder, not a per-step penalty. In percent it is ~14% on `draft` and ~4-5% on the 49-frame tiers
+  (biggest on short clips; real but modest).
 - **Required?** No.
-- **Default:** blank, which keeps each quality tier own safe setting (`model` on this door). Nothing
+- **Default:** blank, which keeps each quality tier its own safe setting (`model` on this door). Nothing
   changes unless you set this.
 - **Applies to:** every tier at once (draft, standard, final).
-- **Example:** `VIVIJURE_OFFLOAD=none` on a 20GB+ card renders resident (faster). On a 16GB card leave
-  it blank -- the full 49-frame tiers do not fit resident and would run out of memory.
+- **Set `none` ONLY on a >28GB card (in practice 32GB+, i.e. 48GB-class).** On 24GB or below it does not
+  fit and OOMs on every tier (proven on a real RTX 4090 24GB, and on a 20GiB card in S37; see
+  [proof/OFFLOAD-S38.md](proof/OFFLOAD-S38.md)). On any card this door targets (24GB and down), leave it
+  blank.
 - **Bad value:** the backend refuses to start and tells you the valid modes, rather than quietly using
   the default. Fix the value (or unset it) and start again.
-
 ---
 
 ## 2. Built-in settings (set for you in `docker-compose.yml`)
