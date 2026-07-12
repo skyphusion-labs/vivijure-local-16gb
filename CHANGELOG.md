@@ -3,6 +3,21 @@
 All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.3.1 -- 2026-07-12
+
+Feature: the door declares its duration grid on `/health` (#707).
+
+- `/health` gains an additive optional `duration_grid` block so the control plane preflights a
+  storyboard against the card real limits instead of guessing:
+  `{"fps": 8, "tiers": {"draft": {"max_frames": 25}, "standard": {"max_frames": 49}, "final":
+  {"max_frames": 49}}}`. Values are DERIVED from the same config the clamps use (`tier_config`
+  max_frames + a new `EXPORT_FPS` single-source constant `from_request` now reads), so there is one
+  source of truth. Door-gated in the byte-identical core via `getattr(door, "DURATION_GRID", None)`;
+  the sibling LTX door omits it (absence = no declared constraint).
+- Docs: `docs/proof/OFFLOAD-S37.md` records the S37 offload-knob bench on the 20GiB standing-door card
+  (VIVIJURE_OFFLOAD=none OOMs every tier; `model` is the fastest that fits; the knob is a 24GB+
+  operator win). No engine change; the v0.3.0 offload knob default is unchanged.
+
 ## v0.3.0 -- 2026-07-12
 
 Feature: `VIVIJURE_OFFLOAD` operator knob to pick the diffusers offload mode (#74).
