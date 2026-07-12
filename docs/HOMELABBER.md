@@ -197,8 +197,12 @@ prints a banner like this:
 ================================================================
 ```
 
-**Copy those two values into your Vivijure studio's "Local (your GPU)" door, pick it, and render.**
-A real clip comes back from your own card. That's it -- you just made a film on your own GPU.
+**Wire those two values into your Vivijure studio, then pick this door in the planner and render.**
+Wiring is one step on the studio side: set `LOCAL_BACKEND_URL` and `LOCAL_BACKEND_TOKEN` (plus
+`INSTALL_LOCAL_GPU=1`) in the studio's `deploy.env` and run `./deploy.sh`, which deploys the `local-gpu`
+module and binds it to the core (full steps in [docs/INTEGRATION.md](INTEGRATION.md)). Then open the
+planner, choose the "Local (your GPU)" door in the motion-backend picker, and render -- a real clip
+comes back from your own card. That's it, you just made a film on your own GPU.
 
 One honest heads-up: your **first render** also downloads the CogVideoX weights (~22GB, one time), so
 it takes a good while longer. Later renders skip the download.
@@ -286,7 +290,8 @@ sequential offload, or raise the cap. The startup log prints the applied cap.
 - **First render is slow:** that's the one-time model download (~22GB) populating the cache; expect
   it to take a good while longer on the first render only. Later renders reuse it.
 - **Studio can't reach it:** re-check the Backend URL + token from the banner
-  (`docker compose logs ready`) match what you pasted into the studio.
+  (`docker compose logs ready`) match what you set in the studio's `deploy.env`
+  (`LOCAL_BACKEND_URL` / `LOCAL_BACKEND_TOKEN`).
 - **Renders fail with "could not fetch keyframe ... (404) ... Not Found":** you moved this door to a
   studio on a different Cloudflare account or bucket, but its `.env` still points at the old bucket.
   The door reads keyframes and writes clips against ITS OWN R2, not the studio's, so a 404 here means

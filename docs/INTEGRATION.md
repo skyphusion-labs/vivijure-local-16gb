@@ -153,6 +153,6 @@ that mixes doors will have per-shot lengths that differ by backend -- plan the c
 **The door advertises this grid on `/health`.** `GET /health` returns an additive `duration_grid`
 block (`{"fps": 8, "tiers": {"draft": {"max_frames": 25}, "standard": {"max_frames": 49}, "final":
 {"max_frames": 49}}}`), derived from the same tier config the per-clip clamps use, so the control plane
-can preflight a storyboard against this card real ceiling instead of guessing. The sibling LTX (12gb)
+can preflight a storyboard against this card's real ceiling instead of guessing. The sibling LTX (12gb)
 door omits the block by design (absence = no declared constraint), so a studio treats a door with no
 `duration_grid` as unconstrained.
