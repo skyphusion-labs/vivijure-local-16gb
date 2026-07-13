@@ -1,5 +1,8 @@
 # vivijure-local-16gb
 
+> **Active development.** This repo is still under active development and is known not to work until we
+> finish development. It is not recommended that you deploy this with a production Vivijure Studio.
+
 The **local-consumer** render backend for Vivijure, fidelity variant: image-to-video on a **single
 16GB consumer GPU** running **CogVideoX-5B-I2V** in your own homelab. The higher-fidelity sibling of the
 [LTX door](https://github.com/skyphusion-labs/vivijure-local-12gb) (12GB, lean + fast) and the
