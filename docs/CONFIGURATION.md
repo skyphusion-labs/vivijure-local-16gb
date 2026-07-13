@@ -42,6 +42,17 @@ Copy `.env.example` to `.env` and fill these in. Only the R2 keys are required.
 - **Default:** `vivijure`
 - **Example:** `R2_BUCKET=vivijure`
 
+### `R2_S3_ENDPOINT`
+- **What it is:** the storage endpoint the backend talks to.
+- **Why:** by default the backend talks to Cloudflare R2, and it works the address out from your
+  `R2_ACCOUNT_ID`. If you self-host your storage on MinIO (or another S3-compatible server), point the
+  backend at it here instead.
+- **Required?** No.
+- **Default:** unset -- Cloudflare R2 (the derived `https://<account-id>.r2.cloudflarestorage.com`).
+- **Example:** `R2_S3_ENDPOINT=https://minio.local:9000` (self-host); leave unset for Cloudflare R2.
+- **Note:** a custom endpoint automatically uses path-style addressing (`host/bucket`), which MinIO
+  requires; the Cloudflare R2 default is unchanged.
+
 ### `LOCAL_BACKEND_TOKEN`
 - **What it is:** a secret password that every render request must carry.
 - **Why:** your backend is reachable over a public web address (the tunnel, below). The password stops a
