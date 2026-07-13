@@ -9,8 +9,6 @@ from __future__ import annotations
 import sys
 import types
 
-import pytest
-
 from vivijure_local.core.r2 import R2, R2Config
 
 
