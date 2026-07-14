@@ -39,7 +39,7 @@ flowchart TD
     slate[slate<br/>Discord screenwriter bot]
 
     subgraph core[The control plane]
-        studio[vivijure Studio<br/>projects, storyboard, cast,<br/>render orchestration + module registry]
+        studio[Vivijure Studio<br/>vivijure-cf or vivijure-local<br/>on vivijure-core]
     end
 
     subgraph modules[Modules: one job each, opt-in]
@@ -265,7 +265,7 @@ makes the i2v endpoint refuse to serve). The backend holds no studio secrets and
 
 Homelab builders with a **16GB consumer GPU** who want higher-fidelity Vivijure image-to-video (CogVideoX-5B) locally without RunPod rent.
 
-**Vivijure Studio:** https://vivijure.com · **Welcome demo:** https://vivijure.skyphusion.org/welcome · **Skyphusion Labs:** https://skyphusion.org
+**Vivijure Studio:** https://vivijure.com · **Live demo:** https://demo.vivijure.com · **Skyphusion Labs:** https://skyphusion.org
 
 ## Support
 
