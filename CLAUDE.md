@@ -42,6 +42,9 @@ the matching doc.
 - `docs/i2v-model-selection.md` -- why CogVideoX-5B-I2V (the fidelity door) vs LTX / SVD / AnimateDiff.
 - `docs/live-benchmark-plan.md` -- the costed, spend-gated plan for the on-card benchmark (executed 2026-07-01).
 - `docs/proof/RESULTS.md` -- the validated fit/speed numbers (populated; the 16GB floor proof).
+- `deploy/runtime.Dockerfile` + `.github/workflows/runtime-build.yml` -- the heavy CUDA/torch/deps
+  RUNTIME BASE (tag `runtime-t<N>`) built rarely on the larger runner; `deploy/Dockerfile` is
+  `FROM runtime@digest` + COPY src so a src-only release is a thin, fast, cheap build.
 - `docs/RUN-LOG.md` -- the running build/validation log.
 
 ## The job API (RunPod-compatible, `src/vivijure_local/core/server.py`)

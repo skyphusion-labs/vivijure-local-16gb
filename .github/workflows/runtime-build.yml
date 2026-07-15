@@ -1,0 +1,168 @@
+name: Build runtime base image to GHCR
+
+# Build + push the RUNTIME BASE image (deploy/runtime.Dockerfile): CUDA + torch + the render deps, the
+# heavy slow-changing layer set. The consuming release (publish.yml -> deploy/Dockerfile) is then just
+# `FROM this@digest` + COPY src, so a src-only release re-pushes ONLY the app layer and the torch/deps
+# layers dedup on GHCR. That moves the ~10 min torch + diffusers/transformers install OFF the per-release
+# hot path (it runs here, rarely) -- the larger-runner cost win.
+#
+#   ghcr.io/skyphusion-labs/vivijure-local-16gb:runtime-t<N>   (a TAG in the same package)
+#
+# Unlike vivijure-backend's runtime-build there is NO seed image and NO snapshot runner: this door bakes
+# no model weights (CogVideoX pulls on the first render), so the base is a plain ~8GB build with no
+# disk-reclaim gymnastics.
+#
+# workflow_dispatch (a deliberate toolchain bump) + a monthly CVE-refresh floor. NEVER fork-reachable
+# (dispatch + schedule only), so packages:write is never exposed to a fork. Runs on the GitHub-hosted
+# larger runner vivijure-bake-local (same as publish.yml) for the disk headroom.
+
+on:
+  workflow_dispatch:
+    inputs:
+      toolchain_version:
+        description: 'Toolchain version -> the runtime-t<N> tag (bump on a CUDA/torch/deps change).'
+        required: true
+        default: '1'
+        type: string
+  # Monthly CVE-refresh FLOOR: baked base images rot (CVEs + stale apt/pip freeze in at build time), and
+  # every release inherits these layers, so the base age = shipped CVE posture. The scheduled run
+  # rebuilds WHATEVER runtime-t<N> is currently pinned in deploy/Dockerfile (no drift) at the SAME tag
+  # with fresh base/apt/pip layers, then opens a RUNTIME_REF digest-bump PR. A deliberate toolchain bump
+  # still goes through the workflow_dispatch input above.
+  schedule:
+    - cron: '0 6 1 * *'   # 06:00 UTC, 1st of each month
+
+permissions:
+  contents: write         # push the auto-repin branch
+  packages: write         # push the runtime image
+  pull-requests: write    # open the RUNTIME_REF repin PR
+
+concurrency:
+  group: runtime-build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: skyphusion-labs
+  IMAGE: vivijure-local-16gb
+
+jobs:
+  build-and-push:
+    runs-on: vivijure-bake-local
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Resolve tag
+        id: cfg
+        run: |
+          set -eu
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            # CVE-refresh floor: rebuild whatever runtime-t<N> deploy/Dockerfile currently pins, so a
+            # frozen cron can never refresh a config nobody ships.
+            TVER="$(grep -oE 'runtime-t[0-9]+' deploy/Dockerfile | head -1 | sed 's/runtime-t//')"
+            [ -n "${TVER}" ] || { echo "::error::could not read a runtime-t<N> pin from deploy/Dockerfile"; exit 1; }
+            echo "Scheduled CVE-refresh re-bake of the shipped runtime: runtime-t${TVER} (same tag, fresh layers)."
+          else
+            TVER='${{ github.event.inputs.toolchain_version }}'
+          fi
+          case "${TVER}" in ''|*[!0-9]*) echo "::error::toolchain_version must be a positive integer"; exit 1;; esac
+          echo "tag=runtime-t${TVER}"                          >> "$GITHUB_OUTPUT"
+          echo "immutable_tag=runtime-t${TVER}-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "Building ${IMAGE}:runtime-t${TVER}."
+
+      # DOCKER driver (not docker-container): the build cache IS the daemon image store, so `load: true`
+      # then `docker push` / `docker inspect` / `docker run` all operate on the same local image.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        with:
+          driver: docker
+
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build the base and LOAD into the local daemon (not pushed yet) so the import smoke runs before
+      # publish. pull: true refreshes the nvidia/cuda base (monthly CVE floor).
+      - name: Build runtime base image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: deploy/runtime.Dockerfile
+          platforms: linux/amd64
+          pull: true
+          load: true
+          push: false
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.IMAGE }}:${{ steps.cfg.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.IMAGE }}:${{ steps.cfg.outputs.immutable_tag }}
+
+      # Toolchain import smoke (CPU, no GPU): catch a torch/CUDA/diffusers ABI break here, in seconds,
+      # rather than at the end of a multi-minute GPU render. importing torch does not need a GPU.
+      - name: Toolchain import smoke (CPU, no GPU)
+        run: |
+          set -eu
+          IMG="${REGISTRY}/${OWNER}/${IMAGE}:${{ steps.cfg.outputs.tag }}"
+          docker run --rm "${IMG}" python3 -c "import torch, torchvision, diffusers, transformers, safetensors; print('runtime import smoke OK:', torch.__version__)"
+
+      - name: Push tags to GHCR
+        id: push
+        run: |
+          set -eu
+          IMG="${REGISTRY}/${OWNER}/${IMAGE}"
+          docker push "${IMG}:${{ steps.cfg.outputs.tag }}"
+          docker push "${IMG}:${{ steps.cfg.outputs.immutable_tag }}"
+          DIGEST="$(docker inspect --format '{{ index .RepoDigests 0 }}' "${IMG}:${{ steps.cfg.outputs.tag }}" | sed 's/.*@//')"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Pushed ${IMAGE}:${{ steps.cfg.outputs.tag }} (+ immutable) -- ${DIGEST}"
+
+      - name: Summary (repin the runtime in deploy/Dockerfile)
+        run: |
+          IMG="${REGISTRY}/${OWNER}/${IMAGE}"
+          {
+            echo "## Runtime base image published"
+            echo ""
+            echo "| field | value |"
+            echo "|---|---|"
+            echo "| tag | \`${IMG}:${{ steps.cfg.outputs.tag }}\` |"
+            echo "| immutable tag | \`${IMG}:${{ steps.cfg.outputs.immutable_tag }}\` |"
+            echo "| digest | \`${{ steps.push.outputs.digest }}\` |"
+            echo ""
+            echo "Repin in \`deploy/Dockerfile\`, then cut a release tag:"
+            echo ""
+            echo '```dockerfile'
+            echo "ARG RUNTIME_REF=${IMG}:${{ steps.cfg.outputs.tag }}@${{ steps.push.outputs.digest }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Auto-open (or update) the RUNTIME_REF repin PR so the new digest reaches deploy/Dockerfile with a
+      # human merge through the gate. Fixed, force-updated branch so re-bakes never pile up PRs. Graceful
+      # degrade: if the org "Actions can create PRs" setting is off, the branch is still pushed and we log
+      # a warning -- never a hard fail.
+      - name: Open/update the RUNTIME_REF repin PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          NEWREF="${REGISTRY}/${OWNER}/${IMAGE}:${{ steps.cfg.outputs.tag }}@${{ steps.push.outputs.digest }}"
+          BRANCH="auto/runtime-repin"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B "${BRANCH}" origin/main
+          sed -i "s|ARG RUNTIME_REF=.*|ARG RUNTIME_REF=${NEWREF}|" deploy/Dockerfile
+          if git diff --quiet -- deploy/Dockerfile; then
+            echo "deploy/Dockerfile already pins ${NEWREF}; nothing to repin."
+            exit 0
+          fi
+          git add deploy/Dockerfile
+          git commit -m "build(bake): repin RUNTIME_REF to the re-baked runtime base"
+          git push -f origin "${BRANCH}"
+          gh pr create --base main --head "${BRANCH}" \
+            --title "build(bake): repin RUNTIME_REF to the re-baked runtime base" \
+            --body "Automated RUNTIME_REF digest bump from a runtime re-bake (${GITHUB_EVENT_NAME}). New base: ${NEWREF}. Merge through the gate to refresh the shipped CVE posture; the next release inherits it. Fixed branch (force-updated), so re-bakes do not pile up PRs." \
+            || echo "::warning::PR not auto-created (branch ${BRANCH} pushed; open it manually -- check the org Actions-create-PR setting)."

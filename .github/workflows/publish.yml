@@ -10,20 +10,23 @@ name: Publish door image to GHCR
 # workflow_dispatch). This pipeline BUILDS + PUSHES; it does not deploy anything (a local door has no
 # serverless endpoint -- the operator pulls the image via docker-compose.yml).
 #
-# Runner: the GitHub-hosted LARGER runner "vivijure-bake-local" (bare label; the paid hosted-larger
-# capacity class, ~300GB disk, same form as vivijure-backend release.yml "vivijure-bake"). Conrad
-# ruling 2026-07-04: we pay for runner capacity, so we USE it -- no disk-reclaim gymnastics on an
-# undersized runner. Still fork-safe trivially: a hosted-larger runner is an ephemeral VM (NOT a
-# persistent self-hosted box), AND this workflow triggers ONLY on v* tags + maintainer
-# workflow_dispatch, which a fork cannot create, so untrusted code never reaches the runner and
-# packages:write is never exposed to a fork. The larger-runner disk swallows the ~8.5GB image + torch
-# build cache with room to spare, so there is NO disk-reclaim step.
+# THIN BUILD: this image is `FROM <runtime base>@digest` + COPY src (see deploy/Dockerfile). The heavy
+# CUDA/torch/deps install lives in the runtime base (deploy/runtime.Dockerfile, built by
+# runtime-build.yml), so a src-only release re-pushes ONLY the app layer -- the ~10 min torch +
+# diffusers/transformers install does NOT run here. That is the runner-cost win: the slow bake happens
+# rarely (a toolchain bump or the monthly CVE floor), not on every release.
 #
-# NOTE vs vivijure-backend release.yml (the model): the backend BAKES ~90GB of weights, so it stages an
-# R2 seed, bin-packs sub-10GB layers, and import-smokes to guard a hollow bake. This door BAKES NO
-# weights (CogVideoX pulls on the first render into a volume), so none of that applies -- this is a
-# plain build + push with no disk-reclaim step (the larger runner has the headroom). GHCR auth uses the built-in GITHUB_TOKEN (packages:write
-# below), not a long-lived PAT: least privilege, blast radius of one workflow run.
+# Runner: the GitHub-hosted LARGER runner "vivijure-bake-local" (paid hosted-larger capacity, ~300GB
+# disk). Kept here even though the build is now thin: `pull: true` fetches the ~8GB runtime base FROM,
+# which unpacks larger than a standard ubuntu-latest runner's ~14GB free disk comfortably holds, so the
+# headroom is still worth it (Conrad ruling 2026-07-04: we pay for capacity, we use it). Still fork-safe
+# trivially: a hosted-larger runner is an ephemeral VM, AND this workflow triggers ONLY on v* tags +
+# maintainer workflow_dispatch, which a fork cannot create, so packages:write is never exposed to a fork.
+#
+# NOTE vs vivijure-backend release.yml (the model): the backend BAKES ~90GB of weights (seed image, R2
+# stage, bin-packed layers). This door BAKES NO weights (CogVideoX pulls on the first render into a
+# volume), so its runtime base is a plain ~8GB CUDA/torch/deps image and this release is a plain thin
+# build + push. GHCR auth uses the built-in GITHUB_TOKEN (packages:write below), least privilege.
 
 on:
   push:
