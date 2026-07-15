@@ -92,7 +92,7 @@ a placeholder clip.
   messages. Use commas, semicolons, parentheses, or a double hyphen (`--`).
 - **Conventional Commits**: `fix(scope): ...`, `feat(scope): ...`, `docs: ...`, `ci: ...`. The
   body explains the *why*.
-- Versioning is SemVer-style (PATCH for fixes, MINOR for features while pre-1.0). Release
+- Versioning is [SemVer](https://semver.org/) from v1.0.0 onward. Release
   mechanics follow this repo's docs.
 
 ## Acceptable use (the one hard line)

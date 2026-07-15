@@ -1,12 +1,13 @@
 # Make films on your own GPU (CogVideoX)
 
 Vivijure's motion engine (image-to-video), running on **your** graphics card with **CogVideoX-5B-I2V**,
-the fidelity-first local engine. No cloud GPU, no per-render bill. One setup step (your studio's R2
-storage credentials), one command, and you're rendering.
+the fidelity-first local engine. **Production-ready** (v1.0.0): safe to wire into a production Vivijure
+Studio today. No cloud GPU, no per-render bill. One setup step (your studio's R2 storage credentials),
+one command, and you're rendering.
 
-> PROVEN on real silicon: the honest floor is a **16GB card**, and the per-clip speeds below are
-> measured (`docs/proof/RESULTS.md`). If you want the fastest local option instead of the highest
-> fidelity, use the LTX door (vivijure-local-12gb).
+> **PROVEN on real silicon:** the honest floor is a **16GB card**, speeds are measured, and real-content
+> renders are clean on the native 49-frame grid (`docs/proof/RESULTS.md`). Want the fastest local option
+> instead of the highest fidelity? Use the **[12GB LTX door](https://github.com/skyphusion-labs/vivijure-local-12gb)**.
 
 ## Quickstart (you'll be rendering in minutes)
 
@@ -237,14 +238,16 @@ iteration; pick the datacenter door for maximum fidelity without owning hardware
 The studio's three tiers map to CogVideoX settings. CogVideoX-5B-I2V is a fixed-grid model (720x480,
 49 frames @ 8 fps), so the tiers differ by inference **steps** (quality vs speed), not frame count or
 resolution. Off-grid frame counts can complete but decode as latent tile noise.
-`final` here is the model's honest ceiling on your card, not datacenter parity. Speeds are measured
-on an RTX 4090 24GB (`docs/proof/RESULTS.md`); a 16GB card runs slower.
+`final` here is the model's honest ceiling on your card, not datacenter parity.
 
-| Tier | Resolution | Frames | Steps | Speed feel |
-|---|---|---|---|---|
-| draft | 720x480 | 49 (~6.1s) | 30 | fastest tier (new shape rebenchmark pending) |
-| standard | 720x480 | 49 (~6.1s) | 40 | the everyday tier (~4min/clip) |
-| final | 720x480 | 49 (~6.1s) | 50 | best quality, slowest (~5min/clip) |
+| Tier | Resolution | Frames | Steps | Speed on a 16GB Ada-class card | Speed on RTX 4090 (reference) |
+|---|---|---|---|---|---|
+| draft | 720x480 | 49 (~6.1s) | 30 | ~8.5 min/clip | ~1.6 min/clip |
+| standard | 720x480 | 49 (~6.1s) | 40 | ~11 min/clip | ~4 min/clip |
+| final | 720x480 | 49 (~6.1s) | 50 | ~14 min/clip (estimated) | ~5 min/clip |
+
+Numbers from `docs/proof/RESULTS.md` (July 2026). Your card may be faster or slower; the 16GB floor
+means **fit**, not a speed guarantee.
 
 ### A stable address (named tunnel)
 
@@ -265,14 +268,16 @@ same way.
 
 ### Sharing your GPU (cap the VRAM)
 
-If this card is also driving your display, running another model, or you just want to leave headroom
-for other work, you can bound how much VRAM vivijure is allowed to take. Set `VIVIJURE_MAX_VRAM_GB` in
-`.env` to the maximum in GB, and the backend pins itself to that slice of the card at startup -- it can
-never grab the whole thing.
+The shipped stack defaults `VIVIJURE_MAX_VRAM_GB=15.5` so a **16GB card does not OOM** from PyTorch
+reserving opportunistically (the honest floor for 49-frame CogVideoX with model CPU offload). You do not
+need to set this on a first run.
+
+If you have a bigger card and want the full VRAM budget, raise it in `.env` (e.g. `24` on a 24GB card).
+If you share the card with a display, another model, or a game, you can lower it further:
 
 ```sh
-# cap vivijure at 14GB and leave the rest of the card for everything else
-VIVIJURE_MAX_VRAM_GB=14
+# example: leave 4GB for desktop + another workload on a 20GB card
+VIVIJURE_MAX_VRAM_GB=16
 ```
 
 Leave it blank to use the whole card (the default). A value at or above your card's real size is the

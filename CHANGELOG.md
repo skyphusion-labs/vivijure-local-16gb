@@ -1,7 +1,31 @@
 # Changelog
 
-All notable changes to vivijure-local-16gb are recorded here. This project follows SemVer-style
-`0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
+Notable changes per release. This project follows [SemVer](https://semver.org/) from **v1.0.0**
+onward (production-ready baseline).
+
+## v1.0.0 -- 2026-07-15
+
+**Production release.** The CogVideoX fidelity door is ready for homelabbers and production Vivijure
+Studios.
+
+- **Native 49-frame grid on every tier.** Off-grid frame counts (25, 41) could report `COMPLETED` but
+  decode as latent tile noise; all tiers now use CogVideoX-5B-I2V's trained shape and differ only by
+  inference steps.
+- **Shipped `VIVIJURE_MAX_VRAM_GB=15.5` default** in `.env.example` and `docker-compose.yml` so real
+  16GB cards do not OOM from PyTorch's opportunistic allocator on bigger silicon. Live proof on RTX 4000
+  Ada: standard tier completes under the cap with model CPU offload.
+- **Real-content validation** on physical Ada silicon (lighthouse scene, production studio path via
+  `local-gpu` module). Clean mp4 output, 49 frames @ 8 fps, no tile noise.
+- **Documentation pass:** removed pre-release warnings; tier tables include both RTX 4090 (reference) and
+  RTX 4000 Ada (homelab baseline) timings; 8th-grade walkthroughs in README and HOMELABBER unchanged in
+  shape, updated for production posture.
+
+## v0.4.1 -- 2026-07-15
+
+- **Force every tier onto CogVideoX-5B-I2V's native 49-frame grid.** Real-content diagnostics on a
+  physical RTX 4000 Ada reproduced valid-looking `COMPLETED` mp4s containing only latent tile noise
+  at 25 and 41 frames; the otherwise identical 49-frame control rendered coherently. `draft` now
+  differs by steps only, and caller-provided `num_frames` is ignored instead of silently corrupting.
 
 ## v0.4.1 -- 2026-07-15
 
@@ -40,7 +64,7 @@ Feature: the door declares its duration grid on `/health` (#707).
 
 - `/health` gains an additive optional `duration_grid` block so the control plane preflights a
   storyboard against the card real limits instead of guessing:
-  `{"fps": 8, "tiers": {"draft": {"max_frames": 25}, "standard": {"max_frames": 49}, "final":
+  `{"fps": 8, "tiers": {"draft": {"max_frames": 49}, "standard": {"max_frames": 49}, "final":
   {"max_frames": 49}}}`. Values are DERIVED from the same config the clamps use (`tier_config`
   max_frames + a new `EXPORT_FPS` single-source constant `from_request` now reads), so there is one
   source of truth. Door-gated in the byte-identical core via `getattr(door, "DURATION_GRID", None)`;
@@ -48,7 +72,6 @@ Feature: the door declares its duration grid on `/health` (#707).
 - Docs: `docs/proof/OFFLOAD-S37.md` records the S37 offload-knob bench on the 20GiB standing-door card
   (VIVIJURE_OFFLOAD=none OOMs every tier; `model` is the fastest that fits; the knob is a 24GB+
   operator win). No engine change; the v0.3.0 offload knob default is unchanged.
-
 ## v0.3.0 -- 2026-07-12
 
 Feature: `VIVIJURE_OFFLOAD` operator knob to pick the diffusers offload mode (#74).

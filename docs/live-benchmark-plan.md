@@ -1,10 +1,7 @@
-# Live benchmark plan -- Milestone 2 (EXECUTED 2026-07-01; results in `proof/RESULTS.md`)
+# Live benchmark plan -- executed 2026-07-01 (results in `proof/RESULTS.md`)
 
-> Spend gate. Everything else in this repo (research, scaffold, the dry fit analysis, the CPU test
-> suite) needed ZERO GPU spend and is Milestone 1. THIS is Milestone 2: the one step that needs real
-> silicon to finalize -- the VRAM floor CogVideoX-5B-I2V actually fits, the offload mode required, and
-> the real per-clip wall-clock. **NOT executed here. Costed and flagged for approval before any paid
-> GPU is spun up.**
+> **Status: DONE.** Milestone 2 ran on a secure RunPod pod in July 2026. This document is the method
+> record; the numbers live in `proof/RESULTS.md`.
 
 ## Why a live run is needed at all
 

@@ -16,10 +16,9 @@ CogVideoX-5B-I2V is FIXED-GRID: it is trained/validated at 720x480 x 49 frames @
 badly off that grid, so -- unlike the LTX door, where tiers scale resolution -- these tiers differ
 only by inference STEPS. Frame count and resolution stay on the model's native grid.
 
-These numbers are SCAFFOLD DEFAULTS. The offload mode + VRAM floor that genuinely fit a consumer card
-can only be finalized by a live benchmark on real silicon (docs/live-benchmark-plan.md); until then
-they are conservative and tunable via env. Nothing here trains or generates; this module is pure +
-CPU-importable (no torch), exactly like vivijure-backend's config.py.
+These numbers are MEASURED defaults (docs/proof/RESULTS.md). The offload mode + VRAM floor that fit a
+consumer card were pinned by the July 2026 card benchmark. Nothing here trains or generates; this module
+is pure + CPU-importable (no torch), exactly like vivijure-backend's config.py.
 """
 from __future__ import annotations
 

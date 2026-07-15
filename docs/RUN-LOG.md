@@ -2,7 +2,16 @@
 
 The running build/validation log for the CogVideoX local door. Newest first.
 
-## 2026-07-01 -- Milestone 1: scaffold (CPU-only, $0, no GPU)
+## 2026-07-15 -- v1.0.0 production release
+
+Production-ready baseline shipped.
+
+- Native 49-frame grid on every tier (off-grid counts withdrawn after real-content tile-noise diagnostics).
+- Shipped `VIVIJURE_MAX_VRAM_GB=15.5` default in compose + `.env.example`.
+- Real-content validation on RTX 4000 Ada via production Vivijure Studio (`local-gpu` module).
+- Documentation pass: removed pre-release warnings; tier tables include Ada homelab baseline timings.
+
+## 2026-07-01 -- Milestone 1: initial implementation (CPU-only, $0, no GPU)
 
 CogVideoX-5B-I2V local door scaffolded from the shipped LTX door (`vivijure-local-12gb`), swapping ONLY
 the model-load + inference layer; the model-agnostic parts (HTTP server, R2 store, job/status/cancel

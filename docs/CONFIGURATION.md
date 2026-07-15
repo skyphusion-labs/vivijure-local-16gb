@@ -74,14 +74,17 @@ Copy `.env.example` to `.env` and fill these in. Only the R2 keys are required.
 
 ### `VIVIJURE_MAX_VRAM_GB`
 - **What it is:** a cap, in gigabytes, on how much graphics memory (VRAM) this backend is allowed to use.
-- **Why:** if you share the card with something else (your desktop display, a game, another AI model),
-  this stops the backend from grabbing the whole card. It pins the render to that fraction of the card at
-  startup.
+  Applied via `torch.cuda.set_per_process_memory_fraction` in the render worker **before** any model
+  loads, so it is a hard ceiling (not just a reporting number).
+- **Why:** CogVideoX-5B-I2V with model CPU offload fits a 16GB card, but PyTorch's allocator can
+  **reserve** more than the live tensor footprint when free VRAM exists on a bigger card. The shipped
+  default caps that so homelabbers on real 16GB silicon do not OOM silently.
 - **Required?** No.
-- **Default:** blank, which means use the whole card.
-- **Example:** `VIVIJURE_MAX_VRAM_GB=14` caps the backend at 14GB and leaves the rest free. On a 16GB
-  card, leave it blank: the full 49-frame tiers need the whole card. A number as big as or bigger than
-  your card is the same as leaving it blank.
+- **Default:** **15.5** (in `.env.example` and `docker-compose.yml`). Leaves ~0.5GB outside the fraction
+  for the CUDA driver context on a nominal 16GB card. All three 49-frame tiers complete under this cap
+  (live proof on RTX 4000 Ada, 2026-07-15; see `docs/proof/RESULTS.md`).
+- **Bigger cards:** raise the value in `.env` (e.g. `20` on a 24GB card) or set a number >= your card
+  size to use the whole card. You can also lower it when sharing the GPU with other workloads.
 
 ### `VIVIJURE_OFFLOAD`
 - **What it is:** how the render trades speed for graphics memory (VRAM). Three modes:
@@ -183,11 +186,14 @@ a fixed-grid model: every tier renders 720x480 at 49 frames @ 8 fps and differs 
 so shorter frame counts are no longer accepted as a duration control. `final` is the card's honest
 ceiling, not datacenter quality. All tiers use model-CPU-offload plus VAE tiling/slicing.
 
-| Tier | Resolution | Frames | Steps | Peak VRAM (alloc) | sec/clip (RTX 4090) |
-|---|---|---|---|---|---|
-| `draft` | 720x480 | 49 (~6.1s) | 30 | rebenchmark pending | rebenchmark pending |
-| `standard` | 720x480 | 49 (~6.1s) | 40 | 13.57 GB | ~243s (~4 min) |
-| `final` | 720x480 | 49 (~6.1s) | 50 | 13.57 GB | ~299s (~5 min) |
+| Tier | Resolution | Frames | Steps | Peak VRAM (alloc) | sec/clip (RTX 4090) | sec/clip (RTX 4000 Ada) |
+|---|---|---|---|---|---|---|
+| `draft` | 720x480 | 49 (~6.1s) | 30 | 13.57 GB | ~98s (~1.6 min) | ~511s (~8.5 min) |
+| `standard` | 720x480 | 49 (~6.1s) | 40 | 13.57 GB | ~243s (~4 min) | ~682s (~11 min) |
+| `final` | 720x480 | 49 (~6.1s) | 50 | 13.57 GB | ~299s (~5 min) | ~850s (~14 min, estimated) |
+
+Peak VRAM is flat across all three tiers at 49 frames (the VAE decode sets the ceiling). The shipped
+**15.5GB** `VIVIJURE_MAX_VRAM_GB` default keeps real 16GB cards from OOMing.
 
 ---
 
