@@ -52,7 +52,7 @@ the user picks the door that fits their card + patience + quality bar.
 
 **CogVideoX1.5-5B-I2V** as a higher tier (720p, up to 81 frames) is the natural next step once the 5B-I2V
 floor is proven. It may require a newer diffusers; if so, that is a separate, justified pin bump gated on
-staying torch-2.4-compatible, evaluated then -- NOT in this scaffold.
+staying torch-2.4-compatible, evaluated as a future higher tier -- NOT in v1.0.0.
 
 ## The honest tier mapping
 

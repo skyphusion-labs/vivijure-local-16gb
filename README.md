@@ -1,17 +1,19 @@
 # vivijure-local-16gb
 
-> **Active development.** This repo is still under active development and is known not to work until we
-> finish development. It is not recommended that you deploy this with a production Vivijure Studio.
-
 The **local-consumer** render backend for Vivijure, fidelity variant: image-to-video on a **single
-16GB consumer GPU** running **CogVideoX-5B-I2V** in your own homelab. The higher-fidelity sibling of the
+16GB consumer GPU** running **CogVideoX-5B-I2V** in your own homelab. **Production-ready** as of
+**v1.0.0** (July 2026): proven on real silicon, wired to the Vivijure Studio `local-gpu` module, and
+safe to run beside a production control panel.
+
+The higher-fidelity sibling of the
 [LTX door](https://github.com/skyphusion-labs/vivijure-local-12gb) (12GB, lean + fast) and the
 deliberate opposite of [vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (the
 RunPod datacenter engine, Wan 2.2 on H200/B200).
 
-> **16GB floor, PROVEN.** The VRAM floor was measured on real silicon (RTX 4090 24GB, cap-swept down):
-> the full 49-frame tiers fit a 16GB card and OOM at 14GB and 12GB. Numbers below are measured, not
-> estimated. Full proof: [docs/proof/RESULTS.md](docs/proof/RESULTS.md).
+> **16GB floor, PROVEN.** Fit and quality were measured on real hardware (cap-sweep on RTX 4090, then
+> real-content confirmation on RTX 4000 Ada under the shipped **15.5GB VRAM cap**). The full 49-frame
+> tiers complete without OOM on a nominal 16GB card. Full proof:
+> [docs/proof/RESULTS.md](docs/proof/RESULTS.md).
 
 **One studio, many honest doors.** The studio's `motion.backend` hook makes the clip engine pluggable.
 The control plane is unchanged; the user picks the door: rent datacenter GPU, or run it on silicon they
@@ -79,6 +81,22 @@ flowchart TD
 
 The full map, the same one every constellation repo shows, and how to read it, is in
 **[docs/constellation.md](docs/constellation.md)**.
+
+## Production readiness (v1.0.0)
+
+This door is ready for a production Vivijure Studio today. What that means in plain terms:
+
+| Gate | Status |
+|---|---|
+| 16GB VRAM floor proven (cap-sweep + Ada real-content) | Done |
+| Clean video on native 49-frame grid (no tile noise) | Done |
+| Studio `local-gpu` module integration | Done |
+| `/status` stays responsive during renders (worker subprocess) | Done |
+| Safe default VRAM cap (`15.5GB`) in compose | Done |
+| One-command homelab bring-up (`docker compose up`) | Done |
+
+Still out of scope for v1.0.0: CogVideoX1.5 (720p / longer clips) as a higher tier, and vGPU slices
+(cloud "16Q" profiles) which produce noise on this engine -- use the [12GB LTX door](https://github.com/skyphusion-labs/vivijure-local-12gb) instead.
 
 ## Quickstart (your first run)
 
@@ -164,7 +182,7 @@ Copy `.env.example` to `.env` and fill it in. Every setting is an environment va
 | `R2_BUCKET` | no | `vivijure` | The shared bucket name. |
 | `LOCAL_BACKEND_TOKEN` | no | auto-generated | The bearer token every i2v request must carry (the tunnel is public). Blank => a strong one is generated and printed in the banner; set it for a stable token across restarts. |
 | `TUNNEL_TOKEN` | no | quick tunnel | A Cloudflare named-tunnel token for a STABLE hostname (also needs the `docker-compose.override.yml` from HOMELABBER "A stable address"). Blank => a zero-config TryCloudflare quick tunnel (URL changes each restart). |
-| `VIVIJURE_MAX_VRAM_GB` | no | full card | Cap the VRAM vivijure claims, in GB, when you share the card with other workloads. The backend pins torch to that fraction of the card at startup. Blank (or a value >= your card's size) => use the whole card. On a 16GB card, leave it blank -- the full 49-frame tiers need the whole card. |
+| `VIVIJURE_MAX_VRAM_GB` | no | **15.5** | Cap the VRAM vivijure claims, in GB. The backend pins torch to that fraction at startup (before model load). The shipped default is **15.5GB** so a 16GB card cannot OOM from opportunistic allocator growth; 49-frame tiers complete under this cap with model CPU offload (see `docs/proof/RESULTS.md`). On a 24GB+ card, raise in `.env` or set >= your card size for the full card. |
 | `VIVIJURE_OFFLOAD` | no | blank (`model`) | How the render trades speed for VRAM. Blank keeps the safe default (`model`: evict the big text encoder between uses). `none` holds the whole model resident (faster by ~17-18s/clip) but the model is **~28GB resident (measured)**, so set it ONLY on a **>28GB card** (32GB+, i.e. 48GB-class); on 24GB or below it OOMs every tier. Proof: [docs/proof/OFFLOAD-S38.md](docs/proof/OFFLOAD-S38.md). |
 
 The full reference -- every `.env` value, every built-in setting, the ports, the volumes, and the
@@ -189,25 +207,26 @@ it renders 720x480 at 49 frames @ 8 fps (~6.1s), and can silently decode off-gri
 latent tile noise. All three quality tiers therefore stay at 49 frames and differ only by inference
 **steps**. `final` is the card's honest ceiling, not datacenter parity.
 
-Measured on the real shipped container (RTX 4090 24GB Ada, `enable_model_cpu_offload()` + VAE
-tiling/slicing, bf16; cold model-load 29s). Peak VRAM below is `max_memory_allocated` (the true need):
+Measured on the real shipped container (`enable_model_cpu_offload()` + VAE tiling/slicing, bf16).
+Peak VRAM below is `max_memory_allocated` (live tensor bytes). The stack defaults to a **15.5GB cap**
+so homelabbers on real 16GB cards do not OOM (see `VIVIJURE_MAX_VRAM_GB`).
 
-| Tier | Resolution | Frames | Steps | Peak VRAM (alloc) | sec/clip |
-|---|---|---|---|---|---|
-| `draft` | 720x480 | 49 (~6.1s) | 30 | rebenchmark pending | rebenchmark pending |
-| `standard` | 720x480 | 49 (~6.1s) | 40 | 13.57 GB | ~243s (~4 min) |
-| `final` | 720x480 | 49 (~6.1s) | 50 | 13.57 GB | ~299s (~5 min) |
+| Tier | Resolution | Frames | Steps | Peak VRAM (alloc) | sec/clip (RTX 4090) | sec/clip (RTX 4000 Ada 16GB-class) |
+|---|---|---|---|---|---|---|
+| `draft` | 720x480 | 49 (~6.1s) | 30 | 13.57 GB | ~98s (~1.6 min) | ~511s (~8.5 min) |
+| `standard` | 720x480 | 49 (~6.1s) | 40 | 13.57 GB | ~243s (~4 min) | ~682s (~11 min) |
+| `final` | 720x480 | 49 (~6.1s) | 50 | 13.57 GB | ~299s (~5 min) | ~850s (~14 min, estimated from step count) |
 
-The older 25-frame draft benchmark remains in `docs/proof/RESULTS.md` as historical evidence, but
-that shape is withdrawn: real-content diagnostics reproduced valid-looking mp4s containing only
-latent tile noise at 25 and 41 frames. The native 49-frame control rendered coherently.
+The 4090 numbers are from the July 2026 proof gate ([docs/proof/RESULTS.md](docs/proof/RESULTS.md)).
+The Ada column is the honest **homelab baseline** (propagandhi standing door, July 2026); `final` is
+extrapolated from the measured standard tier (~17s/step).
 
 Peak is **flat** across `standard`/`final` (the 49-frame VAE decode bounds it), so higher steps cost
 **time, not VRAM**. All tiers use model-CPU-offload + VAE tiling/slicing.
 
-> **SPEED CAVEAT.** Those sec/clip figures were measured on an **RTX 4090 24GB**. A 3060 / 4070 /
-> 4060 Ti-class **16GB** card runs **slower** -- expect longer per-clip times on a smaller card. The
-> 16GB floor is about FIT (does it run without OOM), proven by cap-sweep; speed scales with your card.
+> **SPEED CAVEAT.** The 4090 column is the fast reference card from the proof gate. A 3060 / 4070 /
+> 4060 Ti / RTX 4000 Ada-class **16GB** card runs closer to the Ada column -- expect **8 to 14 minutes
+> per clip**, not sub-minute. The 16GB floor is about **fit** (does it run without OOM), not speed.
 
 ### The trade vs the 12GB LTX door
 

@@ -13,9 +13,8 @@ Wan 2.2 on H200/B200): no rent, no cloud GPU, reached over a Cloudflare tunnel t
 
 **One studio, many doors.** The studio's `motion.backend` hook makes the clip engine pluggable; the
 control plane is unchanged and the user picks the door (rent datacenter GPU, or run it on silicon they
-already own -- LTX for speed, CogVideoX for fidelity). **Private repo, WORKING NAME.** The public repo
-name encodes the PROVEN VRAM tier once the card benchmark measures it (prove-then-name, exactly like
-LTX). AGPL-3.0-only.
+already own -- LTX for speed, CogVideoX for fidelity). **Public repo** (`skyphusion-labs/vivijure-local-16gb`).
+**Production-ready** as of v1.0.0 (July 2026). AGPL-3.0-only.
 
 ```
 control plane --> local-gpu module (CF Worker) --/run--> CF tunnel --> THIS backend (CogVideoX-5B-I2V)
@@ -41,8 +40,8 @@ the matching doc.
 - `docs/HOMELABBER.md` -- the run-it-on-your-box walkthrough (prereqs, tunnel, trade-offs, troubleshooting).
 - `docs/INTEGRATION.md` -- the studio-side wiring (pointing the `local-gpu` module at your backend).
 - `docs/i2v-model-selection.md` -- why CogVideoX-5B-I2V (the fidelity door) vs LTX / SVD / AnimateDiff.
-- `docs/live-benchmark-plan.md` -- the costed, spend-gated plan for the on-card benchmark (Milestone 2).
-- `docs/proof/RESULTS.md` -- the validated fit/speed numbers (POPULATED by Milestone 2; pending until then).
+- `docs/live-benchmark-plan.md` -- the costed, spend-gated plan for the on-card benchmark (executed 2026-07-01).
+- `docs/proof/RESULTS.md` -- the validated fit/speed numbers (populated; the 16GB floor proof).
 - `docs/RUN-LOG.md` -- the running build/validation log.
 
 ## The job API (RunPod-compatible, `src/vivijure_local/core/server.py`)
@@ -115,8 +114,7 @@ run the benchmark on a RunPod COMMUNITY pod (secure cloud only; a hard rule).
 - Handle / username is `skyphusion` across all services.
 - **A producer stage never ships a fake clip.** The generation body raises a clear error when the GPU
   runtime is absent rather than faking output; tiers advertise only what a consumer card honestly delivers.
-- **Prove-then-name.** The VRAM tier is not claimed until the card benchmark measures it honestly; the
-  public repo name encodes the proven tier (like LTX's 12GB). Scaffold numbers are labeled as such.
+- **Prove-then-name.** The public repo name encodes the proven VRAM tier (16GB), measured on real silicon.
 - Minimal runtime deps. The `requirements.txt` diffusers/transformers pins are the LTX door's validated
   cu124 set, KEPT here because CogVideoXImageToVideoPipeline is present at diffusers 0.32.2 (verified).
   torch/torchvision install from the CUDA index in `deploy/Dockerfile` (matched to the card), NOT pinned
@@ -134,5 +132,5 @@ run the benchmark on a RunPod COMMUNITY pod (secure cloud only; a hard rule).
 
 ## Commits & versioning
 
-Conventional Commits (`feat(scope):`, `fix(scope):`, `docs:`); body explains the why. SemVer-style
-`0.MINOR.PATCH` while pre-1.0 (PATCH for fixes / backend tweaks, MINOR for features).
+Conventional Commits (`feat(scope):`, `fix(scope):`, `docs:`); body explains the why. SemVer from
+**v1.0.0** onward (MAJOR for breaking API changes, MINOR for features, PATCH for fixes).

@@ -46,8 +46,25 @@ has slightly MORE usable headroom than the raw cap):
 | 11 GB (a 12GB card) | no | -- | **CUDA OOM** mid-denoise |
 
 **FLOOR = a 16GB card.** The full 49-frame tiers fit a ~15GB PyTorch budget and OOM at 13GB; a 12GB or
-14GB card cannot run standard/final. `draft` (25 frames, ~12.35GB alloc) is lighter and may serve a
-smaller card, but the honest full-experience floor is **16GB** (the proven value).
+14GB card cannot run standard/final.
+
+## Real-content confirmation + shipped default cap (2026-07-15)
+
+Follow-up on **physical silicon** (not RunPod): **NVIDIA RTX 4000 SFF Ada, 20GB**, the propagandhi
+standing door, real lighthouse keyframe content (not the synthetic gradient).
+
+| check | result |
+|---|---|
+| `VIVIJURE_MAX_VRAM_GB=15.5` | startup logs `VRAM capped to 15.5GB (0.793 of 19.6GB)` |
+| draft tier (49f / 30 steps) | **COMPLETED**, ~511s engine time, no OOM |
+| standard tier (49f / 40 steps) | **COMPLETED**, ~682s engine time, no OOM; `nvidia-smi` held ~15598 MiB during denoise + decode |
+| visual | coherent scene (no latent tile noise); native 49-frame grid |
+
+**Why 15.5GB is the shipped default:** uncapped on the same 20GB card, `nvidia-smi` reported ~16228 MiB
+during denoise even though `max_memory_allocated` stayed ~13.6GB. That reserved figure is PyTorch grabbing
+free VRAM opportunistically, not proof that a 16GB card needs 16.2GB. The cap forces the honest budget a
+homelabber actually has. `.env.example` and `docker-compose.yml` now default to `15.5`; operators on 24GB+
+cards raise it in `.env`.
 
 ## Two independent legs, both green
 

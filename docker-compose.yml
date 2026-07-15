@@ -56,6 +56,8 @@ services:
       HOST: "0.0.0.0"
       PORT: "8000"
       HF_HOME: "/models/hf"
+      # Honest 16GB-floor default (see .env.example). Override in .env on bigger cards.
+      VIVIJURE_MAX_VRAM_GB: ${VIVIJURE_MAX_VRAM_GB:-15.5}
     volumes:
       - vivijure_models:/models      # CogVideoX weights cache: pulled during the FIRST render, reused after
       - vivijure_runtime:/shared     # the token + tunnel log the `ready` banner reads
