@@ -1,18 +1,24 @@
 name: docker-build-smoke
 
-# Build-only smoke for the consumer-door image. Catches dependency/Dockerfile changes that the CPU
-# pytest suite never exercises (lesson from v0.2.0 av pin). No push, no GPU. Fork-safe ubuntu-latest.
+# Build-only smoke for the RUNTIME BASE image (deploy/runtime.Dockerfile), where the deps now live.
+# Catches dependency/Dockerfile changes that the CPU pytest suite never exercises (lesson from v0.2.0 av
+# pin). Builds runtime.Dockerfile, NOT the thin deploy/Dockerfile: runtime.Dockerfile is self-contained
+# (FROM nvidia/cuda, installs torch + requirements) so it smoke-builds standalone, while deploy/Dockerfile
+# is FROM the published runtime base + COPY src (nothing to smoke, and it needs runtime-t<N> published).
+# No push, no GPU. Fork-safe ubuntu-latest.
 
 on:
   pull_request:
     paths:
       - requirements.txt
+      - deploy/runtime.Dockerfile
       - deploy/Dockerfile
       - .github/workflows/docker-build-smoke.yml
   push:
     branches: [main]
     paths:
       - requirements.txt
+      - deploy/runtime.Dockerfile
       - deploy/Dockerfile
       - .github/workflows/docker-build-smoke.yml
 
@@ -29,5 +35,5 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
-      - name: Build door image (smoke only)
-        run: docker build -f deploy/Dockerfile -t vivijure-local-16gb-smoke:ci .
+      - name: Build runtime base image (smoke only)
+        run: docker build -f deploy/runtime.Dockerfile -t vivijure-local-16gb-runtime-smoke:ci .
