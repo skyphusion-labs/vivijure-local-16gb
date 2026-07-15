@@ -54,6 +54,10 @@ env:
 
 jobs:
   build-and-push:
+    # TODO (doctrine section 8 step 7): flip to `local-16gb-bake-snap` once Conrad creates that
+    # snapshot-consuming runner in the enterprise UI (from runner-snapshot.yml's baked image). On that
+    # warm runner the runtime base FROM is a local cache hit, so the release build is COPY src + push
+    # only. Until then this stays on vivijure-bake-local (correct, just a cold ~8GB base pull-if-absent).
     runs-on: vivijure-bake-local
     timeout-minutes: 60
     steps:
@@ -82,8 +86,15 @@ jobs:
           echo "version=${VER}" >> "$GITHUB_OUTPUT"
           echo "Building ${IMAGE}:${VER} (+ :latest)."
 
+      # DOCKER driver (not the default docker-container driver): the build cache IS the daemon image
+      # store, so when this runs on the warm snapshot runner the pre-pulled runtime base is a local hit
+      # for `FROM runtime@digest`. The container driver keeps a cache disjoint from the daemon store, and
+      # `pull: true` would re-pull regardless -- both defeat the warm runner (S19 platform finding). So:
+      # docker driver + NO pull:true. The FROM is digest-pinned, so pull-if-absent is equally correct.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        with:
+          driver: docker
 
       - name: Log in to GHCR
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
@@ -98,7 +109,6 @@ jobs:
           context: .
           file: deploy/Dockerfile
           platforms: linux/amd64
-          pull: true
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.IMAGE }}:${{ steps.cfg.outputs.version }}
