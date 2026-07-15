@@ -5,6 +5,12 @@ onward (production-ready baseline).
 
 ## Unreleased
 
+- **Runner snapshot lane (`runner-snapshot.yml`) + warm-runner publish config.** A dispatch/monthly
+  workflow pre-pulls the runtime base into a custom runner image (`local-16gb-bake-snapshot`) so a
+  publish on the consuming `local-16gb-bake-snap` runner reads `FROM runtime@digest` cache-warm (COPY
+  src + push only). `publish.yml` now uses the docker buildx driver and drops `pull: true` (S19 warm-
+  runner finding). `runs-on` flips to `local-16gb-bake-snap` once that runner is provisioned (enterprise
+  UI). No model-weights seed (this door bakes none), so the snapshot carries only the ~8GB runtime base.
 - **Split the image into a runtime base + a thin release layer to cut publish cost.** A new
   `deploy/runtime.Dockerfile` (CUDA + torch + the render deps) is built rarely by a new
   `runtime-build.yml` workflow (workflow_dispatch on a toolchain bump + a monthly CVE-refresh cron) and
