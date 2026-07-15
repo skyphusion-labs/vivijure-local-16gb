@@ -259,6 +259,6 @@ def test_health_declares_duration_grid_matching_the_tier_clamps():
     expected = {t.value: {"max_frames": tier_config(t).max_frames} for t in QualityTier}
     assert grid["tiers"] == expected
     # concretely (the #707 ruling values)
-    assert grid["tiers"]["draft"]["max_frames"] == 25
+    assert grid["tiers"]["draft"]["max_frames"] == 49
     assert grid["tiers"]["standard"]["max_frames"] == 49
     assert grid["tiers"]["final"]["max_frames"] == 49

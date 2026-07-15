@@ -234,14 +234,15 @@ iteration; pick the datacenter door for maximum fidelity without owning hardware
 
 ### Quality tiers (what your card honestly delivers)
 
-The studio's three tiers map to CogVideoX settings. CogVideoX-5B-I2V is a fixed-grid model (720x480, up
-to 49 frames @ 8 fps), so the tiers differ by inference **steps** (quality vs speed), not resolution.
+The studio's three tiers map to CogVideoX settings. CogVideoX-5B-I2V is a fixed-grid model (720x480,
+49 frames @ 8 fps), so the tiers differ by inference **steps** (quality vs speed), not frame count or
+resolution. Off-grid frame counts can complete but decode as latent tile noise.
 `final` here is the model's honest ceiling on your card, not datacenter parity. Speeds are measured
 on an RTX 4090 24GB (`docs/proof/RESULTS.md`); a 16GB card runs slower.
 
 | Tier | Resolution | Frames | Steps | Speed feel |
 |---|---|---|---|---|
-| draft | 720x480 | 25 (~3.1s) | 30 | fastest preview (~1.6min/clip) |
+| draft | 720x480 | 49 (~6.1s) | 30 | fastest tier (new shape rebenchmark pending) |
 | standard | 720x480 | 49 (~6.1s) | 40 | the everyday tier (~4min/clip) |
 | final | 720x480 | 49 (~6.1s) | 50 | best quality, slowest (~5min/clip) |
 

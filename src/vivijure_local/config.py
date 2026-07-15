@@ -13,9 +13,8 @@ injected value not in the module's enum, so the local-gpu module's enum stays dr
 in `docs/i2v-model-selection.md`, not in renaming the tiers.
 
 CogVideoX-5B-I2V is FIXED-GRID: it is trained/validated at 720x480 x 49 frames @ 8 fps and degrades
-badly off that grid, so -- unlike the LTX door, where the tiers scale resolution -- these tiers differ
-by inference STEPS and frame COUNT (speed vs fidelity), holding resolution at the model's native grid.
-That is an honest property of the model.
+badly off that grid, so -- unlike the LTX door, where tiers scale resolution -- these tiers differ
+only by inference STEPS. Frame count and resolution stay on the model's native grid.
 
 These numbers are SCAFFOLD DEFAULTS. The offload mode + VRAM floor that genuinely fit a consumer card
 can only be finalized by a live benchmark on real silicon (docs/live-benchmark-plan.md); until then
@@ -69,30 +68,30 @@ EXPORT_FPS = 8
 
 @dataclass(frozen=True)
 class TierConfig:
-    """The engine knobs one quality tier maps to on a consumer card. The animate() body reads these; the
-    frame-count is derived per shot (config.py never fixes a film's length)."""
+    """The engine knobs one quality tier maps to on a consumer card. The animate() body reads these."""
 
     model: str
     steps: int             # CogVideoX-5B-I2V: ~50 denoise steps is the model-card default; draft trims for speed
     guidance_scale: float  # CogVideoX-5B-I2V sampling ~6.0 (the model card default)
     width: int             # native grid 720x480; divisible by 16 (CogVideoX constraint), enforced in snap_dim
     height: int
-    max_frames: int        # ceiling for this tier (snapped to 4k+1 by i2v_cogvideox.snap_frames, cap 49)
+    max_frames: int        # native frame count (49 for CogVideoX-5B-I2V; exposed as the duration-grid cap)
     offload: Offload
     vae_tiling: bool       # decode the VAE in tiles + slices to bound peak decode VRAM (the big consumer saver)
 
 
-# The honest CogVideoX ladder. Resolution is held at the model's native 720x480 across ALL tiers (the
-# model degrades off-grid); the tiers differ by STEPS (fidelity) and, for draft, a shorter clip (speed).
+# The honest CogVideoX ladder. Resolution and frame count are held at the model's native 720x480x49
+# grid across ALL tiers: live diagnostics on physical Ada silicon proved that 25/41-frame renders can
+# complete successfully but decode as latent tile noise. Tiers differ only by STEPS (fidelity/speed).
 # Offload is model-cpu-offload + VAE tiling/slicing, PROVEN to fit a 16GB card across all three tiers
 # (docs/proof/RESULTS.md; 12GB/14GB cards OOM on the 49-frame tiers). NOT datacenter parity; CogVideoX1.5
 # is the future higher tier.
 _TIERS: dict[QualityTier, TierConfig] = {
-    # Fast preview: fewer steps + a shorter clip. Lowest wall-clock (CogVideoX is a full-step model, so
-    # steps dominate runtime). Measured 97.8s/clip on an RTX 4090 (docs/proof).
+    # Fastest native-grid tier: fewer steps, same 49-frame clip. The old 25-frame timing is historical;
+    # this corrected shape needs a fresh benchmark.
     QualityTier.DRAFT: TierConfig(
         model=COGVIDEOX_5B_I2V, steps=30, guidance_scale=6.0,
-        width=720, height=480, max_frames=25, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
+        width=720, height=480, max_frames=49, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
     ),
     # The comfortable middle: the full 49-frame clip at a moderate step count. Measured 243.0s/clip
     # on an RTX 4090 (docs/proof).
@@ -174,16 +173,16 @@ class I2VConfig:
     @classmethod
     def from_request(cls, cfg: dict, *, tier: QualityTier | None = None) -> "I2VConfig":
         """Build from the i2v_clip job's `config` dict. The tier baseline is the source of truth; the
-        caller may narrow (never widen) it. width/height/num_frames default to the tier; an explicit
-        value is clamped to the tier ceiling so a caller can never push the card past its honest fit.
+        caller may narrow width/height (never widen it). CogVideoX-5B-I2V is frame-count fixed: every
+        tier uses the native 49-frame grid, so a caller's num_frames is ignored rather than allowing a
+        valid-looking COMPLETED job whose VAE decode is latent tile noise.
         """
         cfg = cfg or {}
         t = tier or QualityTier.parse(cfg.get("quality"))
         base = _TIERS[t]
-        # Frame count: caller's request, capped at the tier ceiling (the card's honest limit), then
-        # snapped to CogVideoX's 4k+1 stride by the engine. Default to the tier ceiling when unset.
-        req_frames = _coerce_int(cfg.get("num_frames"), base.max_frames)
-        num_frames = min(max(1, req_frames), base.max_frames)
+        # Frame count is not a duration knob for this model. It was trained at 49 frames; physical-card
+        # diagnostics reproduced corrupt tile-noise clips at 25 and 41 frames with no runtime error.
+        num_frames = base.max_frames
         # Resolution: clamp to the tier ceiling on each axis (never widen past the native grid).
         width = min(base.width, _coerce_int(cfg.get("width"), base.width) or base.width)
         height = min(base.height, _coerce_int(cfg.get("height"), base.height) or base.height)

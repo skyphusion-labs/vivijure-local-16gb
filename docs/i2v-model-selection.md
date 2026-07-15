@@ -58,14 +58,13 @@ staying torch-2.4-compatible, evaluated then -- NOT in this scaffold.
 
 The control plane owns the tier vocabulary (`draft` / `standard` / `final`) and injects the chosen tier;
 an enum value not in the module's schema is silently dropped (vivijure #124). So this door keeps the
-same three names. CogVideoX-5B-I2V is FIXED-GRID (720x480, up to 49 frames), so -- unlike the LTX door,
-which scales resolution -- these tiers differ by inference STEPS (and, for draft, a shorter clip), NOT
-resolution. Mapping lives in `src/vivijure_local/config.py`; the peak VRAM + speed are PENDING the card
-benchmark.
+same three names. CogVideoX-5B-I2V is FIXED-GRID (720x480, 49 frames), so -- unlike the LTX door,
+which scales resolution -- these tiers differ only by inference STEPS. Off-grid frame counts can
+silently decode as latent tile noise. Mapping lives in `src/vivijure_local/config.py`.
 
 | Tier | Model | Steps | Resolution | Max frames | Offload | Intent |
 |---|---|---|---|---|---|---|
-| `draft` | CogVideoX-5B-I2V | 30 | 720x480 | 25 | model CPU offload + VAE tiling/slicing | fast preview |
+| `draft` | CogVideoX-5B-I2V | 30 | 720x480 | 49 (~6s @ 8fps) | model CPU offload + VAE tiling/slicing | fastest native-grid tier |
 | `standard` | CogVideoX-5B-I2V | 40 | 720x480 | 49 (~6s @ 8fps) | model CPU offload + VAE tiling/slicing | the comfortable middle |
 | `final` | CogVideoX-5B-I2V | 50 | 720x480 | 49 | model CPU offload + VAE tiling/slicing | the model's honest ceiling |
 

@@ -1,5 +1,11 @@
 # Proof gate: CogVideoX-5B-I2V i2v -- the honest VRAM floor (PASSED)
 
+> **Historical frame-shape warning (2026-07-15):** this proof established fit and throughput with a
+> synthetic gradient, not visual correctness. Later real-content diagnostics found that the 25-frame
+> draft shape can complete but decode as latent tile noise; a 41-frame control failed the same way,
+> while 49 frames rendered coherently. The shipped config now forces 49 frames for every tier. The
+> 25-frame measurements below remain as historical VRAM/timing evidence, not a supported output shape.
+
 Live benchmark of the REAL shipped container (`deploy/Dockerfile` runtime) on a secure RunPod pod,
 2026-07-01. Both legs green; the honest consumer floor is a **16GB card**. This is the fidelity door's
 counterpart to the LTX door's 12GB proof (`vivijure-local-12gb`) -- CogVideoX-5B is materially heavier,
