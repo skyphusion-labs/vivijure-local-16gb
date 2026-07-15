@@ -5,6 +5,15 @@ onward (production-ready baseline).
 
 ## Unreleased
 
+- **Split the image into a runtime base + a thin release layer to cut publish cost.** A new
+  `deploy/runtime.Dockerfile` (CUDA + torch + the render deps) is built rarely by a new
+  `runtime-build.yml` workflow (workflow_dispatch on a toolchain bump + a monthly CVE-refresh cron) and
+  published as `ghcr.io/skyphusion-labs/vivijure-local-16gb:runtime-t<N>`. `deploy/Dockerfile` is now
+  `FROM <runtime base>@digest` + `COPY src`, so a src-only release re-pushes only the app layer and the
+  ~10 min torch + diffusers/transformers install no longer runs on every release. Mirrors
+  vivijure-backend's runtime-base pattern (minus the seed image / snapshot runner, which the doors do
+  not need -- they bake no weights). `runtime-build.yml` auto-opens a `RUNTIME_REF` digest-repin PR.
+
 ## v1.0.0 -- 2026-07-15
 
 **Production release.** The CogVideoX fidelity door is ready for homelabbers and production Vivijure

@@ -1,31 +1,24 @@
-# vivijure-local-16gb runtime image (the CogVideoX consumer door).
+# vivijure-local-16gb RELEASE image (the CogVideoX consumer door): FROM the pinned runtime base + our
+# app code. Deliberately tiny to build: everything heavy (CUDA/torch, diffusers/transformers, the render
+# deps) lives in the runtime base (deploy/runtime.Dockerfile, built by runtime-build.yml). So a src-only
+# release (the common case) re-pushes ONLY the COPY src layer below; the runtime layers are inherited by
+# blob identity and dedup on GHCR. That is the publish-time + runner-cost win.
 #
-# torch/torchvision install from the CUDA index matched to the card's driver line, PINNED to the set
-# validated on real silicon in the S8 re-pin proof (torch 2.5.1 + torchvision 0.20.1 from cu124, paired
-# with diffusers 0.38.0 / transformers 4.57.6 in requirements.txt; CogVideoXImageToVideoPipeline loads +
-# renders on 0.38.0; see SECURITY.md). Portable to any CUDA 12.x card: the pinned cu124 / torch 2.5.1 stack
-# covers Ada / Ampere / Hopper (sm_80/86/89/90), so it runs on a homelab consumer card OR a datacenter
-# secure-cloud pod (the prod local-door flip runs this exact image class on a RunPod SECURE pod). Run
-# it via docker-compose.yml or `docker run --gpus all`.
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
-
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    HF_HOME=/models/hf
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 python3-pip ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+# RELEASE CONTRACT:
+#   * src-only change        -> tag vX.Y.Z (this build; fast, ~app layer only).
+#   * toolchain/deps/CUDA     -> bump runtime-t<N> + rebuild via runtime-build.yml -> repin RUNTIME_REF
+#                                below (its Summary prints the exact line) -> tag vX.Y.Z.
+#
+# Source hackers: `docker compose up --build` builds THIS file, pulling the public runtime base FROM.
+#
+# RUNTIME BASE, pinned by TAG (and, once runtime-build.yml has run, by @sha256 digest for reproducible
+# builds). runtime-build.yml auto-opens a PR that repins this line to tag@digest.
+ARG RUNTIME_REF=ghcr.io/skyphusion-labs/vivijure-local-16gb:runtime-t1
+FROM ${RUNTIME_REF}
 
 WORKDIR /app
 
-# torch first, from the CUDA wheel index (Ada / cu124). Pinned to the proof-validated pair.
-RUN pip3 install --index-url https://download.pytorch.org/whl/cu124 torch==2.5.1 torchvision==0.20.1
-
-COPY requirements.txt /app/requirements.txt
-RUN pip3 install -r /app/requirements.txt
-
+# Our package. This is the ONLY layer that changes on a src-only release, so it is the only re-push.
 COPY src /app/src
 ENV PYTHONPATH=/app/src \
     HOST=0.0.0.0 \
