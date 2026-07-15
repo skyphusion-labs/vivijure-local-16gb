@@ -20,6 +20,20 @@ The control plane is unchanged; the user picks the door: rent datacenter GPU, or
 already own. **Pick this 16GB door for fidelity; pick the 12GB LTX door for speed** (see the trade
 below).
 
+## Releases (which image to run)
+
+**Use a tagged release, not `:latest`.** Stable installs pin an explicit version from
+**[GitHub Releases](https://github.com/skyphusion-labs/vivijure-local-16gb/releases)**.
+
+| Release | Status | GHCR image |
+|---|---|---|
+| **[v1.0.0](https://github.com/skyphusion-labs/vivijure-local-16gb/releases/tag/v1.0.0)** | **Current stable** | `ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.0` |
+
+The tracked `docker-compose.yml` pins **`1.0.0`** (see the `x-door-image` anchor at the top of that
+file). When we ship a newer release, bump that pin to match the new tag, then run
+`docker compose pull && docker compose up -d`. Do not rely on the floating `:latest` tag for production;
+it exists for convenience only.
+
 ```
 control plane --> local-gpu module (CF Worker) --/run--> tunnel --> THIS backend (CogVideoX-5B-I2V, 16GB)
 ```
@@ -122,17 +136,18 @@ Where to get them: Cloudflare dashboard -> R2 -> Manage R2 API Tokens (scope the
 **2. Start it:**
 
 ```sh
+docker compose pull   # fetches ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.0 (pinned in compose)
 docker compose up
 ```
 
-`docker compose up` PULLS the prebuilt image from `ghcr.io/skyphusion-labs/vivijure-local-16gb:latest`
-(no local build; that is the whole ease-of-install point). Prefer to build from source? Run
-`docker compose up --build` instead and compose builds `deploy/Dockerfile` locally.
+`docker compose` pulls the **v1.0.0** image named in `docker-compose.yml` (see
+[Releases](https://github.com/skyphusion-labs/vivijure-local-16gb/releases) for the current stable tag).
+Prefer to build from source? Run `docker compose up --build` instead.
 
-To update to a newer release, pull explicitly: `docker compose pull` then `docker compose up -d`.
-The compose file pins `pull_policy: missing`, so once the image is cached it never re-pulls on its
-own; that is deliberate (no surprise auto-updates), which is why moving to a new release is an
-explicit step.
+To move to a newer GitHub Release: check out that release tag (or bump the `x-door-image` pin in
+`docker-compose.yml` to the new version), then `docker compose pull && docker compose up -d`.
+The compose file uses `pull_policy: missing`, so it will not silently re-pull on every restart; that
+is deliberate (no surprise auto-updates).
 
 The `ready` service prints a banner with your **Backend URL + token**, copy-paste ready. (Your FIRST
 render downloads the CogVideoX weights, ~22GB once, so it takes a good while longer; later renders

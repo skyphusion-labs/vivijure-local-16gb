@@ -168,18 +168,21 @@ shown once when you create the R2 API token.
 ```sh
 git clone https://github.com/skyphusion-labs/vivijure-local-16gb
 cd vivijure-local-16gb
+git checkout v1.0.0    # or stay on main once it pins the same release tag in docker-compose.yml
 ./preflight.sh    # recommended: checks every prerequisite (installs nothing); all green -> go
 cp .env.example .env
 # edit .env: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (R2_BUCKET defaults to "vivijure")
+docker compose pull   # ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.0
 docker compose up
 ```
 
-`docker compose up` PULLS the prebuilt image from GHCR, so there is no long local build -- you go
-straight to rendering. (Prefer to build from source? `docker compose up --build`.)
+`docker compose` pulls the version pinned in `docker-compose.yml` (currently **1.0.0**). See
+**[GitHub Releases](https://github.com/skyphusion-labs/vivijure-local-16gb/releases)** for the current
+stable tag. (Prefer to build from source? `docker compose up --build`.)
 
-Updating: `docker compose up` PULLS the image once, then `pull_policy: missing` means it never
-re-pulls on its own -- no surprise auto-updates. To move to a newer release, pull it explicitly with
-`docker compose pull`, then `docker compose up -d`.
+Updating: bump the `x-door-image` pin in `docker-compose.yml` to the new release tag (or `git checkout`
+that tag), then `docker compose pull && docker compose up -d`. The file uses `pull_policy: missing`, so
+it will not re-pull on its own between restarts.
 
 (Forgot the R2 creds? The backend prints a plain message telling you exactly what to set -- not a stack
 trace -- and you just run `docker compose up` again.)

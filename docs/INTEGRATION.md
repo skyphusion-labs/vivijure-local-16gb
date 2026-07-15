@@ -2,7 +2,7 @@
 
 How `vivijure-local-16gb` (this repo) plugs into the Vivijure studio through the `local-gpu`
 motion.backend module. The control plane is UNCHANGED in code; wiring is binding + secrets + the
-homelabber's running backend. Stage all of this now; flip it on the instant the benchmark proves out.
+homelabber's running backend. **Production-ready as of v1.0.0** (July 2026).
 
 ## The picture
 
