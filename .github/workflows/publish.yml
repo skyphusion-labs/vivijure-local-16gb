@@ -54,11 +54,7 @@ env:
 
 jobs:
   build-and-push:
-    # TODO (doctrine section 8 step 7): flip to `local-16gb-bake-snap` once Conrad creates that
-    # snapshot-consuming runner in the enterprise UI (from runner-snapshot.yml's baked image). On that
-    # warm runner the runtime base FROM is a local cache hit, so the release build is COPY src + push
-    # only. Until then this stays on vivijure-bake-local (correct, just a cold ~8GB base pull-if-absent).
-    runs-on: vivijure-bake-local
+    runs-on: local-16gb-bake-snap
     timeout-minutes: 60
     steps:
       - name: Checkout repository
