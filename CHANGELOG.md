@@ -27,6 +27,13 @@ Studios.
   at 25 and 41 frames; the otherwise identical 49-frame control rendered coherently. `draft` now
   differs by steps only, and caller-provided `num_frames` is ignored instead of silently corrupting.
 
+## v0.4.1 -- 2026-07-15
+
+- **Force every tier onto CogVideoX-5B-I2V's native 49-frame grid.** Real-content diagnostics on a
+  physical RTX 4000 Ada reproduced valid-looking `COMPLETED` mp4s containing only latent tile noise
+  at 25 and 41 frames; the otherwise identical 49-frame control rendered coherently. `draft` now
+  differs by steps only, and caller-provided `num_frames` is ignored instead of silently corrupting.
+
 ## v0.4.0 -- 2026-07-12
 
 Root fix for the `/status` stall (#77, the door half of vivijure#719), plus corrected offload guidance

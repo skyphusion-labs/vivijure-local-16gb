@@ -221,6 +221,10 @@ The 4090 numbers are from the July 2026 proof gate ([docs/proof/RESULTS.md](docs
 The Ada column is the honest **homelab baseline** (propagandhi standing door, July 2026); `final` is
 extrapolated from the measured standard tier (~17s/step).
 
+The older 25-frame draft benchmark remains in `docs/proof/RESULTS.md` as historical evidence, but
+that shape is withdrawn: real-content diagnostics reproduced valid-looking mp4s containing only
+latent tile noise at 25 and 41 frames. The native 49-frame control rendered coherently.
+
 Peak is **flat** across `standard`/`final` (the 49-frame VAE decode bounds it), so higher steps cost
 **time, not VRAM**. All tiers use model-CPU-offload + VAE tiling/slicing.
 
