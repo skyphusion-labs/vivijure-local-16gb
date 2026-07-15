@@ -21,10 +21,11 @@ def test_tier_parse_is_lenient_and_defaults_to_standard():
 
 def test_the_three_tiers_map_to_distinct_honest_configs():
     draft, std, final = (tier_config(t) for t in (QualityTier.DRAFT, QualityTier.STANDARD, QualityTier.FINAL))
-    # draft is the lightest/fastest; final is the card's honest ceiling (more steps; res is fixed at the
-    # CogVideoX native grid).
+    # Tiers differ by steps only. Frame count + resolution stay on CogVideoX's native grid because
+    # off-grid frame counts can complete but decode as latent tile noise.
     assert draft.width <= std.width <= final.width
     assert final.steps > std.steps > draft.steps           # CogVideoX tiers differ by steps (fidelity)
+    assert {draft.max_frames, std.max_frames, final.max_frames} == {49}
     assert all(t.offload is Offload.MODEL_CPU_OFFLOAD for t in (draft, std, final))  # CogVideoX-5B needs model-offload on a consumer card
     assert all(t.vae_tiling for t in (draft, std, final))   # tiling everywhere (the big 16GB saver)
 
@@ -38,7 +39,7 @@ def test_from_request_uses_the_tier_baseline():
     assert cfg.width == base.width and cfg.height == base.height
 
 
-def test_caller_can_narrow_but_never_widen_past_the_honest_ceiling():
+def test_caller_can_narrow_dimensions_but_frame_count_stays_native():
     base = tier_config(QualityTier.STANDARD)
     # Ask for a huge resolution + frame count: clamped DOWN to the tier ceiling (the card's honest fit).
     cfg = I2VConfig.from_request(
@@ -46,9 +47,11 @@ def test_caller_can_narrow_but_never_widen_past_the_honest_ceiling():
     )
     assert cfg.width == base.width and cfg.height == base.height
     assert cfg.num_frames == base.max_frames
-    # A smaller request is honored (narrowing is fine).
-    smaller = I2VConfig.from_request({"quality": "standard", "num_frames": 49})
-    assert smaller.num_frames == 49
+    # A smaller frame request is NOT honored: 25/41-frame runs silently produced latent tile noise.
+    for requested in (1, 25, 41, 48, 49):
+        assert I2VConfig.from_request(
+            {"quality": "standard", "num_frames": requested}
+        ).num_frames == 49
 
 
 def test_fps_pinned_to_8_and_seed_and_negative_pass_through():

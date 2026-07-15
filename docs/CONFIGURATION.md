@@ -146,8 +146,8 @@ narrow a tier but never push the card past its limit.
 
 | Setting | What it is | Default | Notes |
 |---|---|---|---|
-| `quality` | Which tier to render: `draft`, `standard`, or `final`. | `standard` | Picks the frames / steps from the tier table below. An unknown value falls back to `standard`. |
-| `num_frames` | How many frames (clip length). | the tier's ceiling | Capped at the tier ceiling, then snapped to CogVideoX's frame stride (4k+1). |
+| `quality` | Which tier to render: `draft`, `standard`, or `final`. | `standard` | Picks the inference steps from the tier table below. An unknown value falls back to `standard`. |
+| `num_frames` | Legacy shared-door field. | **fixed at 49** | Ignored by this door. CogVideoX-5B-I2V silently produced latent tile noise at off-grid 25/41-frame counts, so every tier uses its native 49-frame grid. |
 | `fps` | Playback speed, frames per second. | **fixed at 8** | CogVideoX-5B-I2V generates its frames FOR 8 fps. A higher requested value is ignored so the clip is not sped up; the model's cadence cannot be changed by a knob. |
 | `seed` | The random seed, for repeatable output. | `-1` (random) | Same seed + same inputs = the same clip. |
 | `flow_shift` | A sampling knob that trades motion smoothness against sharpness. | `5.0` | Advanced; the Studio rarely changes it. |
@@ -178,15 +178,14 @@ To start completely fresh (re-download models, new token), remove these with
 ## The quality tiers
 
 The Studio's tier names map to CogVideoX settings a 16GB card can honestly deliver. CogVideoX-5B-I2V is
-a fixed-grid model: it renders 720x480 at up to 49 frames @ 8 fps, so the tiers differ by inference
-**steps** (and, for `draft`, a shorter clip) -- NOT resolution. `final` is the card's honest ceiling,
-not datacenter quality. All tiers use model-CPU-offload plus VAE tiling/slicing, which keeps peak memory
-flat across `standard`/`final`, so higher steps cost time, not memory. These numbers were measured on an
-RTX 4090 24GB; a smaller 16GB card runs slower (fit is proven by cap-sweep, see `docs/proof/RESULTS.md`).
+a fixed-grid model: every tier renders 720x480 at 49 frames @ 8 fps and differs only by inference
+**steps**. Off-grid 25/41-frame diagnostics completed without an error but decoded as latent tile noise,
+so shorter frame counts are no longer accepted as a duration control. `final` is the card's honest
+ceiling, not datacenter quality. All tiers use model-CPU-offload plus VAE tiling/slicing.
 
 | Tier | Resolution | Frames | Steps | Peak VRAM (alloc) | sec/clip (RTX 4090) |
 |---|---|---|---|---|---|
-| `draft` | 720x480 | 25 (~3.1s) | 30 | 12.35 GB | ~98s (~1.6 min) |
+| `draft` | 720x480 | 49 (~6.1s) | 30 | rebenchmark pending | rebenchmark pending |
 | `standard` | 720x480 | 49 (~6.1s) | 40 | 13.57 GB | ~243s (~4 min) |
 | `final` | 720x480 | 49 (~6.1s) | 50 | 13.57 GB | ~299s (~5 min) |
 

@@ -127,31 +127,31 @@ DoS trigger against the homelab box.
 
 ## Clip duration and cadence (plan beat-sync around it)
 
-CogVideoX-5B-I2V is a fixed 8 fps model with a hard 49-frame ceiling, so this door does NOT render to a
-requested duration -- it renders a FIXED-LENGTH clip per tier and exports it at 8 fps:
+CogVideoX-5B-I2V is a fixed 8 fps model trained at 49 frames, so this door does NOT render to a
+requested duration. Every tier renders the native 49-frame clip and exports it at 8 fps:
 
 | Tier | Frames | Realized length @ 8 fps |
 |---|---|---|
-| `draft` | 25 | ~3.1s |
+| `draft` | 49 | ~6.1s |
 | `standard` | 49 | ~6.1s |
 | `final` | 49 | ~6.1s |
 
 Two consequences the studio side must plan for (properties of the model, not knobs this door can honor):
 
-1. **A requested duration is quantized, not honored.** A shot asking for ~5s comes back as ~6.1s on
-   `standard`/`final` or ~3.1s on `draft`. `num_frames` can only LOWER the count within the tier ceiling
-   (snapped to the 4k+1 stride); it can never extend a clip past 49 frames or change the 8 fps cadence.
+1. **A requested duration does not change generation length.** Every shot comes back as ~6.1s.
+   `num_frames` is ignored: live diagnostics showed that off-grid 25/41-frame jobs can report success
+   while producing only latent tile noise.
 2. **The cadence is 8 fps, not 24.** A shared `local-gpu` module may default `fps=24` (the LTX door's
    cadence); this door ignores it and pins export to 8 fps, because CogVideoX's frames ARE 8 fps frames
    (exporting them at 24 would play about 3x too fast).
 
-For **beat-sync and audio alignment**, treat a local-16gb clip as a fixed ~3.1s or ~6.1s beat at 8 fps,
+For **beat-sync and audio alignment**, treat a local-16gb clip as a fixed ~6.1s beat at 8 fps,
 and lay audio / music cuts against the REALIZED length (`output.seconds` in the job result), never
 against the requested seconds. The datacenter door and the LTX door do not share this ceiling, so a film
 that mixes doors will have per-shot lengths that differ by backend -- plan the cut list accordingly.
 
 **The door advertises this grid on `/health`.** `GET /health` returns an additive `duration_grid`
-block (`{"fps": 8, "tiers": {"draft": {"max_frames": 25}, "standard": {"max_frames": 49}, "final":
+block (`{"fps": 8, "tiers": {"draft": {"max_frames": 49}, "standard": {"max_frames": 49}, "final":
 {"max_frames": 49}}}`), derived from the same tier config the per-clip clamps use, so the control plane
 can preflight a storyboard against this card's real ceiling instead of guessing. The sibling LTX (12gb)
 door omits the block by design (absence = no declared constraint), so a studio treats a door with no

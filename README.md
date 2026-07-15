@@ -185,18 +185,22 @@ and the ordered flip) is in **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 (strong first-frame identity, coherent motion, real text control), chosen here as the deliberate
 opposite trade-off to the LTX door's speed (the full comparison is
 [docs/i2v-model-selection.md](docs/i2v-model-selection.md)). CogVideoX-5B-I2V is a **fixed-grid** model:
-it renders 720x480 at up to 49 frames @ 8 fps (~6s), and degrades off that grid, so the three quality
-tiers differ by inference **steps** (and, for `draft`, a shorter clip) -- NOT resolution. `final` is
-the card's honest ceiling, not datacenter parity.
+it renders 720x480 at 49 frames @ 8 fps (~6.1s), and can silently decode off-grid frame counts as
+latent tile noise. All three quality tiers therefore stay at 49 frames and differ only by inference
+**steps**. `final` is the card's honest ceiling, not datacenter parity.
 
 Measured on the real shipped container (RTX 4090 24GB Ada, `enable_model_cpu_offload()` + VAE
 tiling/slicing, bf16; cold model-load 29s). Peak VRAM below is `max_memory_allocated` (the true need):
 
 | Tier | Resolution | Frames | Steps | Peak VRAM (alloc) | sec/clip |
 |---|---|---|---|---|---|
-| `draft` | 720x480 | 25 (~3.1s) | 30 | 12.35 GB | ~98s (~1.6 min) |
+| `draft` | 720x480 | 49 (~6.1s) | 30 | rebenchmark pending | rebenchmark pending |
 | `standard` | 720x480 | 49 (~6.1s) | 40 | 13.57 GB | ~243s (~4 min) |
 | `final` | 720x480 | 49 (~6.1s) | 50 | 13.57 GB | ~299s (~5 min) |
+
+The older 25-frame draft benchmark remains in `docs/proof/RESULTS.md` as historical evidence, but
+that shape is withdrawn: real-content diagnostics reproduced valid-looking mp4s containing only
+latent tile noise at 25 and 41 frames. The native 49-frame control rendered coherently.
 
 Peak is **flat** across `standard`/`final` (the 49-frame VAE decode bounds it), so higher steps cost
 **time, not VRAM**. All tiers use model-CPU-offload + VAE tiling/slicing.
