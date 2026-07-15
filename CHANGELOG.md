@@ -3,6 +3,8 @@
 Notable changes per release. This project follows [SemVer](https://semver.org/) from **v1.0.0**
 onward (production-ready baseline).
 
+## Unreleased
+
 ## v1.0.0 -- 2026-07-15
 
 **Production release.** The CogVideoX fidelity door is ready for homelabbers and production Vivijure
@@ -19,13 +21,8 @@ Studios.
 - **Documentation pass:** removed pre-release warnings; tier tables include both RTX 4090 (reference) and
   RTX 4000 Ada (homelab baseline) timings; 8th-grade walkthroughs in README and HOMELABBER unchanged in
   shape, updated for production posture.
-
-## v0.4.1 -- 2026-07-15
-
-- **Force every tier onto CogVideoX-5B-I2V's native 49-frame grid.** Real-content diagnostics on a
-  physical RTX 4000 Ada reproduced valid-looking `COMPLETED` mp4s containing only latent tile noise
-  at 25 and 41 frames; the otherwise identical 49-frame control rendered coherently. `draft` now
-  differs by steps only, and caller-provided `num_frames` is ignored instead of silently corrupting.
+- **`docker-compose.yml` pins `ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.0`** (not `:latest`).
+  README adds a Releases table pointing at GitHub Releases as the install source of truth.
 
 ## v0.4.1 -- 2026-07-15
 
