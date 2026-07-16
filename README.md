@@ -27,9 +27,10 @@ below).
 
 | Release | Status | GHCR image |
 |---|---|---|
-| **[v1.0.0](https://github.com/skyphusion-labs/vivijure-local-16gb/releases/tag/v1.0.0)** | **Current stable** | `ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.0` |
+| **[v1.0.1](https://github.com/skyphusion-labs/vivijure-local-16gb/releases/tag/v1.0.1)** | **Current stable** | `ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.1` |
+| [v1.0.0](https://github.com/skyphusion-labs/vivijure-local-16gb/releases/tag/v1.0.0) | Previous | `ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.0` |
 
-The tracked `docker-compose.yml` pins **`1.0.0`** (see the `x-door-image` anchor at the top of that
+The tracked `docker-compose.yml` pins **`1.0.1`** (see the `x-door-image` anchor at the top of that
 file). When we ship a newer release, bump that pin to match the new tag, then run
 `docker compose pull && docker compose up -d`. Do not rely on the floating `:latest` tag for production;
 it exists for convenience only.
@@ -136,7 +137,7 @@ Where to get them: Cloudflare dashboard -> R2 -> Manage R2 API Tokens (scope the
 **2. Start it:**
 
 ```sh
-docker compose pull   # fetches ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.0 (pinned in compose)
+docker compose pull   # fetches ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.1 (pinned in compose)
 docker compose up
 ```
 
