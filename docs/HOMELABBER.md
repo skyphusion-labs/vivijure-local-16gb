@@ -168,15 +168,15 @@ shown once when you create the R2 API token.
 ```sh
 git clone https://github.com/skyphusion-labs/vivijure-local-16gb
 cd vivijure-local-16gb
-git checkout v1.0.0    # or stay on main once it pins the same release tag in docker-compose.yml
+git checkout v1.0.1    # or stay on main once it pins the same release tag in docker-compose.yml
 ./preflight.sh    # recommended: checks every prerequisite (installs nothing); all green -> go
 cp .env.example .env
 # edit .env: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (R2_BUCKET defaults to "vivijure")
-docker compose pull   # ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.0
+docker compose pull   # ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.1
 docker compose up
 ```
 
-`docker compose` pulls the version pinned in `docker-compose.yml` (currently **1.0.0**). See
+`docker compose` pulls the version pinned in `docker-compose.yml` (currently **1.0.1**). See
 **[GitHub Releases](https://github.com/skyphusion-labs/vivijure-local-16gb/releases)** for the current
 stable tag. (Prefer to build from source? `docker compose up --build`.)
 

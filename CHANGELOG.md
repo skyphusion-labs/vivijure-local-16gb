@@ -5,20 +5,16 @@ onward (production-ready baseline).
 
 ## Unreleased
 
-- **Runner snapshot lane (`runner-snapshot.yml`) + warm-runner publish config.** A dispatch/monthly
-  workflow pre-pulls the runtime base into a custom runner image (`local-16gb-bake-snapshot`) so a
-  publish on the consuming `local-16gb-bake-snap` runner reads `FROM runtime@digest` cache-warm (COPY
-  src + push only). `publish.yml` now uses the docker buildx driver and drops `pull: true` (S19 warm-
-  runner finding). `runs-on` flips to `local-16gb-bake-snap` once that runner is provisioned (enterprise
-  UI). No model-weights seed (this door bakes none), so the snapshot carries only the ~8GB runtime base.
-- **Split the image into a runtime base + a thin release layer to cut publish cost.** A new
-  `deploy/runtime.Dockerfile` (CUDA + torch + the render deps) is built rarely by a new
-  `runtime-build.yml` workflow (workflow_dispatch on a toolchain bump + a monthly CVE-refresh cron) and
-  published as `ghcr.io/skyphusion-labs/vivijure-local-16gb:runtime-t<N>`. `deploy/Dockerfile` is now
-  `FROM <runtime base>@digest` + `COPY src`, so a src-only release re-pushes only the app layer and the
-  ~10 min torch + diffusers/transformers install no longer runs on every release. Mirrors
-  vivijure-backend's runtime-base pattern (minus the seed image / snapshot runner, which the doors do
-  not need -- they bake no weights). `runtime-build.yml` auto-opens a `RUNTIME_REF` digest-repin PR.
+## v1.0.1 -- 2026-07-16
+
+PATCH release so production pins a **semver** consumer image that inherits the re-baked `runtime-t1`
+base (previously only visible as floating `runtime-t1*` tags newer than `1.0.0`).
+
+- **Inherit re-baked runtime base** (`RUNTIME_REF` repin #93) + thin-release bake lane (#91/#92).
+- **fix(announce):** correct ready-banner wiring copy (#97).
+- **deps:** boto3 pip-minor-patch (#95).
+- **ci(publish):** warm snapshot runner wiring (#96).
+- **`__version__` -> 1.0.1**; `docker-compose.yml` / README pin **`:1.0.1`**.
 
 ## v1.0.0 -- 2026-07-15
 
