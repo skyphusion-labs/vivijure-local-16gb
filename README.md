@@ -141,7 +141,7 @@ docker compose pull   # fetches ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.
 docker compose up
 ```
 
-`docker compose` pulls the **v1.0.0** image named in `docker-compose.yml` (see
+`docker compose` pulls the **v1.0.1** image named in `docker-compose.yml` (see
 [Releases](https://github.com/skyphusion-labs/vivijure-local-16gb/releases) for the current stable tag).
 Prefer to build from source? Run `docker compose up --build` instead.
 
