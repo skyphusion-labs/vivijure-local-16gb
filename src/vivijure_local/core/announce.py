@@ -1,10 +1,10 @@
-"""The "ready banner": surface the copy-paste values the moment the stack is actually usable.
+"""The "ready banner": surface the wiring values the moment the stack is actually usable.
 
-Conrad's bar -- transparent + easy: the homelabber runs ONE command and gets a clear, copy-paste-ready
-banner with the backend URL + token, WITHOUT grepping any logs or knowing what a tunnel is. This runs
-as the compose `ready` service: it waits for the tunnel to be up AND the backend healthy AND the token
-written (a readiness gate, not a race), then prints the banner once and idles so `docker compose logs`
-always shows it.
+Conrad's bar -- transparent + easy: the homelabber runs ONE command and gets a clear
+banner with the backend URL + token for studio deploy.env (no paste-into-UI door), WITHOUT
+grepping any logs or knowing what a tunnel is. This runs as the compose `ready` service: it
+waits for the tunnel to be up AND the backend healthy AND the token written (a readiness gate,
+not a race), then prints the banner once and idles so `docker compose logs` always shows it.
 
 Reads, from the shared volume the other services write:
   /shared/token   -- the LOCAL_BACKEND_TOKEN (the backend writes it, generated if the operator left it blank)
@@ -98,8 +98,8 @@ def main() -> int:
     print(f"  Backend URL:    {url}", flush=True)
     print(f"  Backend token:  {token}", flush=True)
     print("", flush=True)
-    print('  -> Paste these into your Vivijure studio\'s "Local (your GPU)" door', flush=True)
-    print("     (LOCAL_BACKEND_URL + LOCAL_BACKEND_TOKEN). That is the whole setup.", flush=True)
+    print("  -> Wire the studio via deploy.env (LOCAL_BACKEND_URL + LOCAL_BACKEND_TOKEN,", flush=True)
+    print("     plus INSTALL_LOCAL_GPU=1) and run ./deploy.sh. There is no paste-into-UI door.", flush=True)
     if hint:
         print("", flush=True)
         print(hint, flush=True)
