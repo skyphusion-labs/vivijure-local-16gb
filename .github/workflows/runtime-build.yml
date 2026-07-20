@@ -13,8 +13,8 @@ name: Build runtime base image to GHCR
 # disk-reclaim gymnastics.
 #
 # workflow_dispatch (a deliberate toolchain bump) + a monthly CVE-refresh floor. NEVER fork-reachable
-# (dispatch + schedule only), so packages:write is never exposed to a fork. Runs on the GitHub-hosted
-# larger runner vivijure-bake-local (same as publish.yml) for the disk headroom.
+# (dispatch + schedule only), so packages:write is never exposed to a fork. Runs on Plane C
+# `[self-hosted, gpu]` (vivijure-gpu-builds; fc#754). GH heavy/vivijure-bake lanes retired by cost ruling.
 
 on:
   workflow_dispatch:
@@ -48,7 +48,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: vivijure-bake-local
+    runs-on: [self-hosted, gpu]
     timeout-minutes: 90
     steps:
       - name: Checkout repository
