@@ -1,109 +1,21 @@
-name: Build runner snapshot image
+name: runner-snapshot (RETIRED)
 
-# Bake a CUSTOM RUNNER IMAGE that pre-pulls this door's RUNTIME BASE into the runner's docker store, so a
-# publish build on the resulting runner reads `FROM runtime@digest` cache-warm instead of pulling the
-# ~8GB base. This is the ACCELERATOR half of the build-cache work (doctrine:
-# fleet-chezmoi/docs/runbooks/gh-runner-doctrine.md section 8, the S20 cookie-cutter).
-#
-# Unlike vivijure-backend's runner-snapshot there is NO seed image to pre-pull (this door bakes no model
-# weights -- CogVideoX pulls on the first render into a volume), so the snapshot carries ONLY the runtime
-# base tag `ghcr.io/skyphusion-labs/vivijure-local-16gb:runtime-t<N>`.
-#
-# ACCELERATOR ONLY (design law): deploy/Dockerfile pins the runtime base by DIGEST. If this snapshot's
-# cached base is older than the pinned digest, docker pulls the newer one (SLOW); a stale snapshot can
-# only make a build SLOWER, never change WHAT it builds. Re-bake (one dispatch) after a runtime bump.
-#
-# DISPATCH-GATED ONLY: image-generation runners bill, so this never triggers on push/PR and is never
-# fork-reachable. The consuming runner (local-16gb-bake-snap) that publish.yml targets is created by
-# Conrad in the ENTERPRISE UI from the image this job snapshots (doctrine section 7: enterprise-side).
-#
-# HOW THE snapshot: MECHANISM WORKS (see doctrine section 4 + 8):
-#   1. Conrad (enterprise UI) adds THIS workflow to the "Enterprise Image Generation Runners" group
-#      allowlist: skyphusion-labs/vivijure-local-16gb/.github/workflows/runner-snapshot.yml@refs/heads/main
-#      (exact ref, never a glob).
-#   2. This job pre-pulls the runtime base, and the job-level snapshot: key captures the runner state into
-#      the named image on SUCCESS.
-#   3. Conrad creates a normal larger runner FROM that image, label local-16gb-bake-snap, image_gen OFF,
-#      group "Vivijure Bake"; then publish.yml flips runs-on to that label (doctrine section 8 step 7).
+# RETIRED 2026-07-20 (fc#754 Conrad ruling): Plane C `[self-hosted, gpu]` (vivijure-gpu-builds)
+# supersedes GH image-generation / larger-runner snapshot lanes. Do not re-enable.
+# Cost: two GPU servers beat GH heavy runners for vivijure image bakes.
+# Snapshot custom images (`local-16gb-bake-snapshot`) are no longer consumed by publish/release workflows.
 
 on:
   workflow_dispatch:
-    inputs:
-      runtime_refs:
-        description: 'Space-separated runtime base refs to pre-pull (tag or tag@digest).'
-        required: true
-        default: 'ghcr.io/skyphusion-labs/vivijure-local-16gb:runtime-t1'
-  # Monthly BACKSTOP: normally the snapshot is refreshed by re-dispatch after a runtime bump. This cron
-  # is the staleness safety net; on a scheduled run it reads the exact shipped RUNTIME_REF pin from
-  # deploy/Dockerfile (no drift) so it always pre-pulls whatever is actually shipped.
-  schedule:
-    - cron: '0 7 1 * *'   # 07:00 UTC, 1st of each month (1h after the runtime re-bake floor)
 
 permissions:
-  contents: read   # checkout for the scheduled pin read
-  packages: read   # docker pull the runtime base from GHCR
-
-concurrency:
-  group: runner-snapshot
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  snapshot:
-    # The enterprise image-generation runner (Conrad-built; GitHub-owned Ubuntu, image-gen ENABLED).
-    # Same one vivijure-backend's runner-snapshot uses.
-    runs-on: ubuntu-latest-32c-128gb-1200-gen
-    # On SUCCESS, GitHub captures this runner into the named custom image (auto-versioned). Conrad creates
-    # the consuming local-16gb-bake-snap runner from it.
-    snapshot: local-16gb-bake-snapshot
-    timeout-minutes: 120
+  retired:
+    runs-on: ubuntu-latest
     steps:
-      - name: Log in to GHCR
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # buildx into the snapshot: the publish bake uses docker/build-push-action (BuildKit).
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-
-      # A scheduled backstop run has no inputs, so read the exact shipped pin (tag@digest) from the
-      # committed deploy/Dockerfile -- the snapshot always pre-pulls whatever is actually shipped.
-      - name: Checkout (scheduled pin read)
-        if: github.event_name == 'schedule'
-        uses: actions/checkout@v7
-
-      - name: Resolve refs to pre-pull
-        id: refs
+      - name: Fail closed
         run: |
-          set -eu
-          REFS="${{ github.event.inputs.runtime_refs }}"
-          if [ -z "${REFS}" ]; then
-            REFS="$(grep '^ARG RUNTIME_REF=' deploy/Dockerfile | sed 's/^ARG RUNTIME_REF=//')"
-            [ -n "${REFS}" ] || { echo "::error::no runtime_refs input and no RUNTIME_REF pin in deploy/Dockerfile"; exit 1; }
-            echo "Scheduled backstop: pre-pulling the shipped pin ${REFS}"
-          fi
-          echo "refs=${REFS}" >> "$GITHUB_OUTPUT"
-
-      # THE POINT: pull the runtime base so it lives in the runner's docker image store BEFORE the
-      # snapshot. A publish build on the resulting runner then reads its FROM cache-warm.
-      - name: Pre-pull runtime base into the docker cache
-        run: |
-          set -eu
-          for ref in ${{ steps.refs.outputs.refs }}; do
-            echo "::group::docker pull ${ref}"
-            docker pull "${ref}"
-            echo "::endgroup::"
-          done
-          echo "Pre-pulled: ${{ steps.refs.outputs.refs }}"
-
-      - name: Report cached state (what the snapshot will carry)
-        run: |
-          set -eu
-          echo "== docker images (runtime base should be present) =="
-          docker images --format '{{.Repository}}:{{.Tag}}  {{.Size}}' | sed -n '1,20p'
-          echo "== buildx =="
-          docker buildx version || true
-          echo "== disk =="
-          df -h / | tail -1
+          echo "::error::runner-snapshot retired (fc#754). Image bakes use Plane C [self-hosted, gpu]."
+          exit 1
