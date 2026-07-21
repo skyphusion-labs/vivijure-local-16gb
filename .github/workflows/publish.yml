@@ -53,7 +53,18 @@ env:
   IMAGE: vivijure-local-16gb
 
 jobs:
+  sync-gpu-allowlist:
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: skyphusion-labs/fleet-chezmoi/.github/workflows/sync-gpu-allowlist.yml@main
+    secrets:
+      RUNNER_GROUP_ADMIN_TOKEN: ${{ secrets.RUNNER_GROUP_ADMIN_TOKEN }}
+    with:
+      ensure_repo: vivijure-local-16gb
+      ensure_tag: ${{ github.ref_name }}
+
   build-and-push:
+    needs: sync-gpu-allowlist
+    if: always() && (needs.sync-gpu-allowlist.result == 'success' || needs.sync-gpu-allowlist.result == 'skipped')
     runs-on: [self-hosted, gpu]
     timeout-minutes: 60
     steps:
