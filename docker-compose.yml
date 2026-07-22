@@ -19,7 +19,7 @@
 # IMAGE VERSION: pinned to a GitHub Release tag (NOT :latest). Bump the tag below when you cut a new
 # release: https://github.com/skyphusion-labs/vivijure-local-16gb/releases
 
-x-door-image: &door-image ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.3
+x-door-image: &door-image ghcr.io/skyphusion-labs/vivijure-local-16gb:1.0.4
 
 services:
   # No explicit container_name on any service: Compose names containers <project>-<service>-1,

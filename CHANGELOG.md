@@ -5,7 +5,12 @@ onward (production-ready baseline).
 
 ## Unreleased
 
+## v1.0.4 -- 2026-07-22
+
+PATCH. Cast-less keyframe preview fix (#153 / #111).
+
 - **fix(preview):** cast-less bundles no longer crash with `image_embeds in added_cond_kwargs`; IP-Adapter loads only when a cast ref image is present (matches vivijure-backend keyframe path).
+- **`__version__` -> 1.0.4**; `docker-compose.yml` pins `:1.0.4`.
 
 ## v1.0.3 -- 2026-07-22
 
