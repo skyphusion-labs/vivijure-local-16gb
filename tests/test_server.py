@@ -85,6 +85,35 @@ def test_run_rejects_unsupported_action_when_authed():
     assert code == 400 and "unsupported action" in body["error"]
 
 
+def test_run_accepts_preview_when_authed():
+    # #153: local door serves keyframe preview alongside i2v_clip.
+    reg = _reg()
+    code, body = route(
+        "POST",
+        "/run",
+        {"input": {"action": "preview", "project": "p", "bundle_key": "bundles/p.tar.gz"}},
+        registry=reg,
+        token=TOK,
+        expected_token=TOK,
+    )
+    assert code == 200 and isinstance(body["id"], str)
+    reg.shutdown()
+
+
+def test_run_rejects_preview_without_bundle_key():
+    code, body = route(
+        "POST",
+        "/run",
+        {"input": {"action": "preview", "project": "p"}},
+        registry=_reg(),
+        token=TOK,
+        expected_token=TOK,
+    )
+    assert code == 400 and "bundle_key" in body["error"]
+
+
+
+
 def test_status_requires_token_then_404_for_unknown():
     # unauthed -> 401; authed unknown id -> the 404 envelope the module's jobGone() detects (#141)
     code, _ = route("GET", "/status/deadbeef", None, registry=_reg(), token=None, expected_token=TOK)
