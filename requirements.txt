@@ -20,7 +20,7 @@ transformers==4.57.6       # latest 4.x; validated with diffusers 0.38.0 on torc
 accelerate==1.14.0         # enable_model_cpu_offload / enable_sequential_cpu_offload (the consumer-VRAM savers)
 safetensors==0.8.0
 sentencepiece==0.2.2       # CogVideoX T5-XXL text encoder tokenizer
-imageio==2.37.3
+imageio==2.37.4
 imageio-ffmpeg==0.6.0      # export_to_video
 av==17.1.0                 # frame-accurate clip write. DO NOT bump to 18.x: av 18 drops Python 3.10
                            # wheels and the door image builds on py3.10, so the bump breaks the GHCR
@@ -28,4 +28,4 @@ av==17.1.0                 # frame-accurate clip write. DO NOT bump to 18.x: av 
                            # base-image Python move. Dependabot ignore below.
 
 # --- object storage (shared vivijure R2 bucket) ---
-boto3==1.43.49
+boto3==1.43.53
