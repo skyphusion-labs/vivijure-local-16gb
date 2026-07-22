@@ -16,6 +16,13 @@ def animate(*args, **kwargs):
     monkeypatch it; the engine module import is cheap, its torch/diffusers load stays deferred)."""
     return _engine.animate(*args, **kwargs)
 
+
+def unload_i2v() -> None:
+    """Drop resident i2v weights before a preview (keyframe) job claims the card (#153)."""
+    unload = getattr(_engine, "unload_all", None)
+    if callable(unload):
+        unload()
+
 # vGPU honesty (16gb#42). This door engine (CogVideoX-5B-I2V) renders pure-noise, corrupt clips on a
 # mediated GRID/vGPU SLICE (e.g. an NVIDIA A16-xQ profile) while still reporting COMPLETED, with no error
 # -- confirmed deterministically across cloud boxes and every door version (16gb#35). A whole-card

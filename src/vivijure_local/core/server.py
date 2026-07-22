@@ -3,7 +3,7 @@
 The local-gpu module worker talks to this exactly as own-gpu talks to RunPod -- same endpoints, same
 status envelope -- so the CF bridge is a near-clone and the control plane is unchanged:
 
-  POST /run            { "input": { action, project, shot_id, prompt, keyframe_key?, config } } -> { "id" }
+  POST /run            { "input": { action: i2v_clip|preview, ... } } -> { "id" }
   GET  /status/<id>    -> { id, status: IN_QUEUE|IN_PROGRESS|COMPLETED|FAILED, output?, error? }
   POST /cancel/<id>    -> { ok: true }  (idempotent; an unknown id is also ok -- nothing is running)
   GET  /health         -> { ok: true, ... }   (liveness for the tunnel + the operator)
@@ -30,8 +30,10 @@ from typing import Callable
 from .. import __version__
 from .. import door
 from ..door import ENGINE, SERVICE, animate
-from .contract import I2VClipRequest, clip_key_for, keyframe_key_for
+from .contract import I2VClipRequest, PreviewRequest, clip_key_for, keyframe_key_for
 from .jobs import Cancelled, JobRegistry
+
+_SUPPORTED_ACTIONS = frozenset({"i2v_clip", "preview"})
 
 _STATUS_RE = re.compile(r"^/status/([A-Za-z0-9]+)$")
 _CANCEL_RE = re.compile(r"^/cancel/([A-Za-z0-9]+)$")
@@ -80,14 +82,26 @@ def route(
         if err:
             return err
         action = str(payload.get("action") or "i2v_clip")
-        if action != "i2v_clip":
-            # This backend serves the motion.backend door only; other actions are an honest 400, not a
-            # silent accept (the datacenter backend owns render/finish_clip).
-            return 400, {"ok": False, "error": f"unsupported action {action!r} (this backend serves i2v_clip)"}
-        req = I2VClipRequest.from_input(payload)
-        reason = req.validate()
-        if reason:
-            return 400, {"ok": False, "error": reason}
+        if action not in _SUPPORTED_ACTIONS:
+            # Local door serves i2v_clip (motion) + preview (keyframes, #153). Other actions are an
+            # honest 400, not a silent accept (the datacenter backend owns render/finish_clip).
+            return 400, {
+                "ok": False,
+                "error": (
+                    f"unsupported action {action!r} "
+                    "(this backend serves i2v_clip and preview)"
+                ),
+            }
+        if action == "preview":
+            req = PreviewRequest.from_input(payload)
+            reason = req.validate()
+            if reason:
+                return 400, {"ok": False, "error": reason}
+        else:
+            req = I2VClipRequest.from_input(payload)
+            reason = req.validate()
+            if reason:
+                return 400, {"ok": False, "error": reason}
         job_id = registry.submit(payload)
         return 200, {"id": job_id}
 
@@ -129,6 +143,10 @@ def build_i2v_run_fn(store, *, workdir: Path | None = None, on_progress: Callabl
 
     def run(payload: dict, should_cancel: Callable[[], bool]) -> dict:
         from ..config import I2VConfig, QualityTier
+        from .. import preview_sdxl
+
+        # Preview and i2v share one card; drop SDXL weights before claiming VRAM for LTX/CogVideoX.
+        preview_sdxl.unload_preview()
 
         req = I2VClipRequest.from_input(payload)
         reason = req.validate()
@@ -192,6 +210,58 @@ def build_i2v_run_fn(store, *, workdir: Path | None = None, on_progress: Callabl
         finally:
             import shutil
             shutil.rmtree(job_dir, ignore_errors=True)
+
+    return run
+
+
+def build_preview_run_fn(
+    store,
+    *,
+    workdir: Path | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> Callable[[dict, Callable[[], bool]], dict]:
+    """Build the preview (keyframe) worker: fetch bundle, draw SDXL stills, upload PNG pointers."""
+    base = Path(workdir) if workdir else Path(tempfile.gettempdir())
+
+    def run(payload: dict, should_cancel: Callable[[], bool]) -> dict:
+        from .. import preview_sdxl
+
+        req = PreviewRequest.from_input(payload)
+        reason = req.validate()
+        if reason:
+            raise ValueError(reason)
+
+        job_dir = Path(tempfile.mkdtemp(prefix="vj-preview-", dir=str(base)))
+        try:
+            return preview_sdxl.render_preview(
+                req,
+                store,
+                job_dir,
+                should_cancel=should_cancel,
+                on_progress=on_progress,
+            )
+        finally:
+            import shutil
+            shutil.rmtree(job_dir, ignore_errors=True)
+
+    return run
+
+
+def build_run_fn(
+    store,
+    *,
+    workdir: Path | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> Callable[[dict, Callable[[], bool]], dict]:
+    """Dispatch worker: `preview` -> SDXL keyframes; everything else -> i2v_clip."""
+    i2v = build_i2v_run_fn(store, workdir=workdir, on_progress=on_progress)
+    preview = build_preview_run_fn(store, workdir=workdir, on_progress=on_progress)
+
+    def run(payload: dict, should_cancel: Callable[[], bool]) -> dict:
+        action = str((payload or {}).get("action") or "i2v_clip")
+        if action == "preview":
+            return preview(payload, should_cancel)
+        return i2v(payload, should_cancel)
 
     return run
 

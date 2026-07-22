@@ -98,7 +98,7 @@ def main() -> int:
         proto.flush()
 
     # apply_vram_cap MUST run in THIS process -- the one that loads the model -- before any torch alloc.
-    from .server import apply_vram_cap, build_i2v_run_fn
+    from .server import apply_vram_cap, build_run_fn
 
     apply_vram_cap()
 
@@ -108,7 +108,7 @@ def main() -> int:
 
     serve_loop(
         emit,
-        lambda on_progress: build_i2v_run_fn(store, on_progress=on_progress),
+        lambda on_progress: build_run_fn(store, on_progress=on_progress),
         sys.stdin.readline,
     )
     return 0
