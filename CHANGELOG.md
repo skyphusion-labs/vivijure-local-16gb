@@ -5,6 +5,14 @@ onward (production-ready baseline).
 
 ## Unreleased
 
+## v1.0.3 -- 2026-07-22
+
+PATCH. Local-GPU keyframes on the door (vivijure-local#153). Dual-door parity with vivijure-local-12gb.
+
+- **feat:** `action: preview` SDXL keyframes (RealVisXL + Hyper-SD, IP-Adapter, pretrained LoRAs).
+- **fix(security):** strict `bundle_key` / LoRA key validation; hardened tar extract; allowlisted model env overrides.
+- **`__version__` -> 1.0.3**; `docker-compose.yml` pins `:1.0.3`.
+
 ## v1.0.2 -- 2026-07-22
 
 PATCH. Dual-door parity with vivijure-local-12gb#99 Defect 1.
