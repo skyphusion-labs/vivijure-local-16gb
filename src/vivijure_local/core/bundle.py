@@ -7,6 +7,7 @@ Pure enough for CPU tests (no torch); PyYAML is a small runtime dep (see require
 from __future__ import annotations
 
 import json
+import shutil
 import tarfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -103,23 +104,43 @@ def _safe_tar_member_name(name: str) -> None:
         raise ValueError(f"unsafe path in bundle: {name}")
 
 
+def _resolve_bundle_path(bundle_root: Path, rel: str) -> Path:
+    root = bundle_root.resolve()
+    target = (root / rel).resolve()
+    if not target.is_relative_to(root):
+        raise ValueError(f"unsafe bundle path: {rel!r}")
+    return target
+
+
 def _safe_extract(tf: tarfile.TarFile, dest: Path) -> None:
     dest = dest.resolve()
     for member in tf.getmembers():
         _safe_tar_member_name(member.name)
         if member.issym() or member.islnk():
             raise ValueError(f"unsafe link in bundle: {member.name}")
+        if not (member.isfile() or member.isdir()):
+            raise ValueError(f"unsafe special file in bundle: {member.name}")
         target = (dest / member.name).resolve()
         if not target.is_relative_to(dest):
             raise ValueError(f"unsafe path in bundle: {member.name}")
     tf.extractall(dest, filter="data")
 
 
+def _reset_extract_dest(dest: Path) -> None:
+    if dest.is_symlink():
+        raise ValueError(f"unsafe extract destination: {dest}")
+    if dest.is_file():
+        dest.unlink()
+    elif dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+
+
 def extract_bundle(tar_path: Path, dest: Path) -> Bundle:
     """Extract a control-plane project bundle and resolve cast reference images."""
     import yaml  # deferred: keep import light for modules that only need types
 
-    dest.mkdir(parents=True, exist_ok=True)
+    _reset_extract_dest(dest)
     with tarfile.open(tar_path, "r:gz") as tf:
         _safe_extract(tf, dest)
 
@@ -133,7 +154,7 @@ def extract_bundle(tar_path: Path, dest: Path) -> Bundle:
         json.loads(reg_path.read_text(encoding="utf-8")) if reg_path.is_file() else {}
     )
 
-    refs_root = dest / (storyboard.refs_dir or "characters/refs")
+    refs_root = _resolve_bundle_path(dest, storyboard.refs_dir or "characters/refs")
     for slot, char in cast.characters.items():
         slot_dir = refs_root / slot
         if slot_dir.is_dir():

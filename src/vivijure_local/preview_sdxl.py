@@ -21,12 +21,19 @@ from pathlib import Path
 from typing import Callable
 
 from .core.bundle import Bundle, build_prompt, extract_bundle
-from .core.contract import PreviewRequest, is_safe_lora_key, keyframe_key_for
+from .core.contract import PreviewRequest, is_safe_lora_key, is_safe_lora_slot, keyframe_key_for
 
 _ALLOWED_KEYFRAME_MODELS = frozenset({"SG161222/RealVisXL_V5.0"})
 _ALLOWED_DISTILL_REPOS = frozenset({"ByteDance/Hyper-SD"})
 _ALLOWED_DISTILL_WEIGHTS = frozenset({"Hyper-SDXL-8steps-CFG-lora.safetensors"})
 _MAX_IMAGE_PIXELS = 4096 * 4096
+_MAX_PRETRAINED_LORA_READS = 4
+_PREVIEW_LIMITS = {
+    "width": (256, 1344),
+    "height": (256, 1344),
+    "steps": (1, 50),
+    "guidance": (0.0, 15.0),
+}
 
 
 def _env_allowlisted(name: str, default: str, allowlist: frozenset[str]) -> str:
@@ -81,13 +88,17 @@ def tier_params(quality_tier: str, overrides: dict | None = None) -> PreviewTier
     if not isinstance(kf, dict):
         return base
 
+    def _clamp(value: float, key: str) -> float:
+        low, high = _PREVIEW_LIMITS[key]
+        return min(high, max(low, value))
+
     def _int(key: str, default: int) -> int:
         v = kf.get(key)
-        return int(v) if isinstance(v, (int, float)) and v > 0 else default
+        return int(_clamp(float(v), key)) if isinstance(v, (int, float)) and not isinstance(v, bool) else default
 
     def _float(key: str, default: float) -> float:
         v = kf.get(key)
-        return float(v) if isinstance(v, (int, float)) else default
+        return _clamp(float(v), "guidance") if isinstance(v, (int, float)) and not isinstance(v, bool) else default
 
     return PreviewTier(
         steps=_int("steps", base.steps),
@@ -222,8 +233,12 @@ def _open_bundle_image(path: Path, bundle_root: Path):
 
 
 def _stage_pretrained_loras(req: PreviewRequest, store, workdir: Path) -> dict[str, Path]:
+    if len(req.pretrained_loras) > _MAX_PRETRAINED_LORA_READS:
+        raise ValueError(f"preview: at most {_MAX_PRETRAINED_LORA_READS} pretrained LoRAs may be staged")
     staged: dict[str, Path] = {}
     for slot, ref in req.pretrained_loras.items():
+        if not is_safe_lora_slot(slot):
+            raise ValueError(f"preview: unsafe LoRA slot: {slot!r}")
         if not is_safe_lora_key(ref):
             raise ValueError(f"preview: unsafe LoRA key for slot {slot}: {ref!r}")
         dest = workdir / "pretrained" / slot / (Path(ref).name or "pytorch_lora_weights.safetensors")
@@ -269,8 +284,15 @@ def render_preview(
         raise ValueError("preview: no scenes in scope to keyframe")
 
     params = tier_params(req.quality_tier, req.render_overrides)
-    staged = _stage_pretrained_loras(req, store, workdir)
     scenes_by_id = {s.id: s for s in bundle.storyboard.scenes}
+    start_images: dict[str, Path] = {}
+    for shot_id in shot_ids:
+        scene = scenes_by_id[shot_id]
+        if scene.start_image:
+            src = _resolve_bundle_path(bundle.root, scene.start_image)
+            if src.is_file():
+                start_images[shot_id] = src
+    staged = _stage_pretrained_loras(req, store, workdir)
 
     print(
         "vivijure-local: preview job -- loading SDXL keyframe weights (cold box may download "
@@ -294,21 +316,16 @@ def render_preview(
             raise RuntimeError("preview cancelled")
         scene = scenes_by_id[shot_id]
         # Injected / authored start image: copy through without SDXL spend.
-        if scene.start_image:
-            try:
-                src = _resolve_bundle_path(bundle.root, scene.start_image)
-            except ValueError:
-                src = None
-            if src is not None and src.is_file():
-                out_path = workdir / "keyframes" / f"{shot_id}.png"
-                out_path.parent.mkdir(parents=True, exist_ok=True)
-                _open_bundle_image(src, bundle.root).save(out_path)
-                key = keyframe_key_for(req.project, shot_id)
-                store.put_file(out_path, key, content_type="image/png")
-                keyframes.append({"shot_id": shot_id, "key": key})
-                if on_progress:
-                    on_progress(i + 1, total)
-                continue
+        if shot_id in start_images:
+            out_path = workdir / "keyframes" / f"{shot_id}.png"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            _open_bundle_image(start_images[shot_id], bundle.root).save(out_path)
+            key = keyframe_key_for(req.project, shot_id)
+            store.put_file(out_path, key, content_type="image/png")
+            keyframes.append({"shot_id": shot_id, "key": key})
+            if on_progress:
+                on_progress(i + 1, total)
+            continue
 
         prompt = build_prompt(scene, bundle.cast, bundle.storyboard)
         kwargs: dict = {
