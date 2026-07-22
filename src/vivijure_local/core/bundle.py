@@ -90,9 +90,23 @@ def cast_from_registry(registry: dict[str, Any]) -> Cast:
     return Cast(characters=out)
 
 
+def _safe_tar_member_name(name: str) -> None:
+    """Reject absolute paths, traversal, backslashes, and empty segments in tar member names."""
+    if not name or name != name.strip():
+        raise ValueError(f"unsafe path in bundle: {name!r}")
+    if name.startswith(("/", "\\")) or (len(name) >= 2 and name[1] == ":"):
+        raise ValueError(f"unsafe path in bundle: {name}")
+    if "\\" in name:
+        raise ValueError(f"unsafe path in bundle: {name}")
+    parts = name.split("/")
+    if any(p in ("", "..") for p in parts):
+        raise ValueError(f"unsafe path in bundle: {name}")
+
+
 def _safe_extract(tf: tarfile.TarFile, dest: Path) -> None:
     dest = dest.resolve()
     for member in tf.getmembers():
+        _safe_tar_member_name(member.name)
         if member.issym() or member.islnk():
             raise ValueError(f"unsafe link in bundle: {member.name}")
         target = (dest / member.name).resolve()

@@ -8,9 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from vivijure_local.core.bundle import build_prompt, extract_bundle, storyboard_from_dict
-from vivijure_local.core.contract import PreviewRequest, keyframe_key_for
-from vivijure_local.preview_sdxl import plan_shots, tier_params
+from vivijure_local.core.bundle import _safe_extract, build_prompt, extract_bundle, storyboard_from_dict
+from vivijure_local.core.contract import PreviewRequest, is_safe_bundle_key, is_safe_lora_key, keyframe_key_for
+from vivijure_local.preview_sdxl import (
+    _ALLOWED_KEYFRAME_MODELS,
+    _env_allowlisted,
+    _stage_pretrained_loras,
+    plan_shots,
+    tier_params,
+)
 
 
 def test_preview_request_requires_bundle_key():
@@ -89,3 +95,106 @@ def test_extract_bundle_and_prompt(tmp_path: Path):
     assert bundle.cast.characters["A"].ref_paths
     prompt = build_prompt(bundle.storyboard.scenes[0], bundle.cast, bundle.storyboard)
     assert "hero walks" in prompt and "Ada" in prompt and "cinematic" in prompt
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "",
+        "bundles",
+        "/bundles/x.tar.gz",
+        "bundles/../etc/passwd",
+        "bundles//x.tar.gz",
+        "bundles\\x.tar.gz",
+        "renders/x.tar.gz",
+        " bundles/x.tar.gz",
+    ],
+)
+def test_preview_rejects_unsafe_bundle_keys(bad: str):
+    req = PreviewRequest.from_input({"project": "p", "bundle_key": bad})
+    assert req.validate() is not None
+    assert not is_safe_bundle_key(bad)
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "bundles/p.tar.gz",
+        "bundles/my-project/abc123.tar.gz",
+    ],
+)
+def test_preview_accepts_safe_bundle_keys(good: str):
+    req = PreviewRequest.from_input({"project": "p", "bundle_key": good})
+    assert req.validate() is None
+    assert is_safe_bundle_key(good)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "/etc/passwd",
+        "bundles/evil.safetensors",
+        "../loras/x.safetensors",
+        "loras/../secret.safetensors",
+    ],
+)
+def test_preview_rejects_unsafe_pretrained_lora_keys(bad: str):
+    req = PreviewRequest.from_input(
+        {"project": "p", "bundle_key": "bundles/p.tar.gz", "pretrained_loras": {"A": bad}}
+    )
+    assert req.validate() is not None
+    assert not is_safe_lora_key(bad)
+
+
+def test_stage_pretrained_loras_rejects_local_paths(tmp_path: Path):
+    local = tmp_path / "evil.safetensors"
+    local.write_bytes(b"x")
+    req = PreviewRequest.from_input(
+        {
+            "project": "p",
+            "bundle_key": "bundles/p.tar.gz",
+            "pretrained_loras": {"A": str(local)},
+        }
+    )
+
+    class Store:
+        def get_file(self, key, dest):
+            raise AssertionError("store should not be called for local paths")
+
+    with pytest.raises(ValueError, match="unsafe LoRA key"):
+        _stage_pretrained_loras(req, Store(), tmp_path / "work")
+
+
+def test_extract_bundle_rejects_symlink(tmp_path: Path):
+    tar_path = tmp_path / "evil.tar.gz"
+    with tarfile.open(tar_path, "w:gz") as tf:
+        info = tarfile.TarInfo("storyboard.yaml")
+        data = b"title: t\nscenes:\n  - id: a\n    prompt: p\n"
+        info.size = len(data)
+        tf.addfile(info, io.BytesIO(data))
+        sym = tarfile.TarInfo("link.txt")
+        sym.type = tarfile.SYMTYPE
+        sym.linkname = "/etc/passwd"
+        tf.addfile(sym)
+    with pytest.raises(ValueError, match="unsafe link"):
+        extract_bundle(tar_path, tmp_path / "out")
+
+
+def test_extract_bundle_rejects_traversal_member(tmp_path: Path):
+    tar_path = tmp_path / "evil.tar.gz"
+    with tarfile.open(tar_path, "w:gz") as tf:
+        info = tarfile.TarInfo("../escape.txt")
+        data = b"pwnd"
+        info.size = len(data)
+        tf.addfile(info, io.BytesIO(data))
+    with tarfile.open(tar_path, "r:gz") as tf:
+        with pytest.raises(ValueError, match="unsafe path"):
+            _safe_extract(tf, tmp_path / "out")
+
+
+def test_env_allowlist_rejects_unknown_keyframe_model_override(monkeypatch):
+    monkeypatch.setenv("VIVIJURE_KEYFRAME_MODEL", "evil/repo")
+    with pytest.raises(ValueError, match="not allowlisted"):
+        _env_allowlisted(
+            "VIVIJURE_KEYFRAME_MODEL", "SG161222/RealVisXL_V5.0", _ALLOWED_KEYFRAME_MODELS
+        )

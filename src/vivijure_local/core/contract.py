@@ -16,9 +16,29 @@ single `i2v_clip` wire contract, locked against drift by `tests/fixtures/i2v_cli
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 _TIERS = frozenset({"draft", "standard", "final"})
+_BUNDLE_KEY_RE = re.compile(r"^bundles/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")
+_LORA_KEY_RE = re.compile(
+    r"^(?:loras/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*"
+    r"|bundles/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*/loras/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*)$"
+)
+
+
+def is_safe_bundle_key(key: str) -> bool:
+    """Reject SSRF / path-traversal prefixes on job-supplied bundle keys before store I/O."""
+    if not key or not _BUNDLE_KEY_RE.fullmatch(key):
+        return False
+    return ".." not in key.split("/")
+
+
+def is_safe_lora_key(key: str) -> bool:
+    """Only durable R2 keys under loras/ or bundles/.../loras/ may stage pretrained adapters."""
+    if not key or not _LORA_KEY_RE.fullmatch(key):
+        return False
+    return ".." not in key.split("/")
 
 
 def _str(v: object, default: str = "") -> str:
@@ -100,8 +120,14 @@ class PreviewRequest:
     def validate(self) -> str | None:
         if not self.bundle_key:
             return "preview: bundle_key is required (no project bundle to fetch)"
-        if not self.bundle_key.startswith("bundles/"):
-            return "preview: bundle_key must start with bundles/"
+        if not is_safe_bundle_key(self.bundle_key):
+            return "preview: bundle_key must be a canonical bundles/... R2 key"
+        for slot, ref in self.pretrained_loras.items():
+            if not is_safe_lora_key(ref):
+                return (
+                    f"preview: pretrained LoRA for slot {slot} must be a loras/... "
+                    "or bundles/.../loras/... R2 key"
+                )
         return None
 
 

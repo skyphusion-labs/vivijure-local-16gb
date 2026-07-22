@@ -21,12 +21,32 @@ from pathlib import Path
 from typing import Callable
 
 from .core.bundle import Bundle, build_prompt, extract_bundle
-from .core.contract import PreviewRequest, keyframe_key_for
+from .core.contract import PreviewRequest, is_safe_lora_key, keyframe_key_for
 
-DEFAULT_MODEL = os.environ.get("VIVIJURE_KEYFRAME_MODEL", "SG161222/RealVisXL_V5.0")
-DISTILL_REPO = os.environ.get("VIVIJURE_KEYFRAME_DISTILL_REPO", "ByteDance/Hyper-SD")
-DISTILL_WEIGHT = os.environ.get(
-    "VIVIJURE_KEYFRAME_DISTILL_WEIGHT", "Hyper-SDXL-8steps-CFG-lora.safetensors"
+_ALLOWED_KEYFRAME_MODELS = frozenset({"SG161222/RealVisXL_V5.0"})
+_ALLOWED_DISTILL_REPOS = frozenset({"ByteDance/Hyper-SD"})
+_ALLOWED_DISTILL_WEIGHTS = frozenset({"Hyper-SDXL-8steps-CFG-lora.safetensors"})
+_MAX_IMAGE_PIXELS = 4096 * 4096
+
+
+def _env_allowlisted(name: str, default: str, allowlist: frozenset[str]) -> str:
+    """Refuse non-allowlisted operator overrides for HuggingFace model identifiers."""
+    if name in os.environ:
+        raw = os.environ[name]
+        if raw not in allowlist:
+            raise ValueError(f"{name}={raw!r} is not allowlisted; permitted: {sorted(allowlist)}")
+        return raw
+    return default
+
+
+DEFAULT_MODEL = _env_allowlisted(
+    "VIVIJURE_KEYFRAME_MODEL", "SG161222/RealVisXL_V5.0", _ALLOWED_KEYFRAME_MODELS
+)
+DISTILL_REPO = _env_allowlisted("VIVIJURE_KEYFRAME_DISTILL_REPO", "ByteDance/Hyper-SD", _ALLOWED_DISTILL_REPOS)
+DISTILL_WEIGHT = _env_allowlisted(
+    "VIVIJURE_KEYFRAME_DISTILL_WEIGHT",
+    "Hyper-SDXL-8steps-CFG-lora.safetensors",
+    _ALLOWED_DISTILL_WEIGHTS,
 )
 IP_ADAPTER_REPO = "h94/IP-Adapter"
 IP_ADAPTER_SUBFOLDER = "sdxl_models"
@@ -174,12 +194,38 @@ def _bind_pretrained_loras(pipe, staged: dict[str, Path]) -> list[str]:
     return names
 
 
+def _resolve_bundle_path(bundle_root: Path, rel: str) -> Path:
+    root = bundle_root.resolve()
+    target = (root / rel).resolve()
+    if not target.is_relative_to(root):
+        raise ValueError(f"unsafe bundle path: {rel!r}")
+    return target
+
+
+def _open_bundle_image(path: Path, bundle_root: Path):
+    """Load a cast ref or start image with size limits; path must stay under bundle_root."""
+    from PIL import Image
+
+    resolved = path.resolve()
+    root = bundle_root.resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError(f"unsafe bundle image path: {path}")
+    old_max = Image.MAX_IMAGE_PIXELS
+    try:
+        Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
+        with Image.open(resolved) as img:
+            img.verify()
+        with Image.open(resolved) as img:
+            return img.convert("RGB")
+    finally:
+        Image.MAX_IMAGE_PIXELS = old_max
+
+
 def _stage_pretrained_loras(req: PreviewRequest, store, workdir: Path) -> dict[str, Path]:
     staged: dict[str, Path] = {}
     for slot, ref in req.pretrained_loras.items():
-        if Path(ref).is_file():
-            staged[slot] = Path(ref)
-            continue
+        if not is_safe_lora_key(ref):
+            raise ValueError(f"preview: unsafe LoRA key for slot {slot}: {ref!r}")
         dest = workdir / "pretrained" / slot / (Path(ref).name or "pytorch_lora_weights.safetensors")
         dest.parent.mkdir(parents=True, exist_ok=True)
         store.get_file(ref, dest)
@@ -212,8 +258,6 @@ def render_preview(
     Result shape matches vivijure-backend preview / the module's parseKeyframes:
       { project, keyframes: [{shot_id, key}, ...], lora?: {slot: {lora_id}} }
     """
-    from PIL import Image
-
     _unload_i2v()
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
@@ -251,11 +295,14 @@ def render_preview(
         scene = scenes_by_id[shot_id]
         # Injected / authored start image: copy through without SDXL spend.
         if scene.start_image:
-            src = bundle.root / scene.start_image
-            if src.is_file():
+            try:
+                src = _resolve_bundle_path(bundle.root, scene.start_image)
+            except ValueError:
+                src = None
+            if src is not None and src.is_file():
                 out_path = workdir / "keyframes" / f"{shot_id}.png"
                 out_path.parent.mkdir(parents=True, exist_ok=True)
-                Image.open(src).convert("RGB").save(out_path)
+                _open_bundle_image(src, bundle.root).save(out_path)
                 key = keyframe_key_for(req.project, shot_id)
                 store.put_file(out_path, key, content_type="image/png")
                 keyframes.append({"shot_id": shot_id, "key": key})
@@ -276,7 +323,7 @@ def render_preview(
         ref = _first_ref_image(bundle, scene)
         if ref is not None and hasattr(pipe, "load_ip_adapter"):
             try:
-                kwargs["ip_adapter_image"] = Image.open(ref).convert("RGB")
+                kwargs["ip_adapter_image"] = _open_bundle_image(ref, bundle.root)
             except Exception:
                 pass
 
