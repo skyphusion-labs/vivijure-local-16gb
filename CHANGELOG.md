@@ -5,12 +5,13 @@ onward (production-ready baseline).
 
 ## Unreleased
 
+## v1.0.2 -- 2026-07-22
 
-### fix(i2v) -- honest clip-upload + job failure logs (local-12gb#99)
+PATCH. Dual-door parity with vivijure-local-12gb#99 Defect 1.
 
-- Wrap clip PUT in contextual `RuntimeError` + stderr (mirrors keyframe GET).
-- Log every handled job failure to stderr so `docker logs` shows the real error.
-
+- **fix(i2v):** wrap clip PUT in contextual `RuntimeError` + stderr (mirrors keyframe GET).
+- **fix(jobs):** log every handled job failure to stderr so `docker logs` shows the real error.
+- `core/` remains byte-identical with vivijure-local-12gb v1.0.2.
 
 ## v1.0.1 -- 2026-07-16
 
