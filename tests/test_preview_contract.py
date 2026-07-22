@@ -12,6 +12,7 @@ from vivijure_local.core.bundle import _safe_extract, build_prompt, extract_bund
 from vivijure_local.core.contract import PreviewRequest, is_safe_bundle_key, is_safe_lora_key, keyframe_key_for
 from vivijure_local.preview_sdxl import (
     _ALLOWED_KEYFRAME_MODELS,
+    _ensure_ip_adapter,
     _env_allowlisted,
     _stage_pretrained_loras,
     plan_shots,
@@ -302,3 +303,39 @@ def test_env_allowlist_rejects_unknown_keyframe_model_override(monkeypatch):
         _env_allowlisted(
             "VIVIJURE_KEYFRAME_MODEL", "SG161222/RealVisXL_V5.0", _ALLOWED_KEYFRAME_MODELS
         )
+
+
+class _FakePipe:
+    def __init__(self):
+        self._vj_ip_loaded = 0
+        self.loads = 0
+        self.unloads = 0
+        self.scales: list[float] = []
+
+    def load_ip_adapter(self, *args, **kwargs):
+        self.loads += 1
+        self._vj_ip_loaded = 1
+
+    def unload_ip_adapter(self):
+        self.unloads += 1
+        self._vj_ip_loaded = 0
+
+    def set_ip_adapter_scale(self, scale):
+        self.scales.append(scale)
+
+
+def test_ensure_ip_adapter_unloads_for_castless_shot():
+    pipe = _FakePipe()
+    pipe._vj_ip_loaded = 1
+    _ensure_ip_adapter(pipe, 0)
+    assert pipe.unloads == 1
+    assert pipe._vj_ip_loaded == 0
+    assert pipe.loads == 0
+
+
+def test_ensure_ip_adapter_loads_when_ref_present():
+    pipe = _FakePipe()
+    _ensure_ip_adapter(pipe, 1)
+    assert pipe.loads == 1
+    assert pipe._vj_ip_loaded == 1
+    assert pipe.scales == [0.7]

@@ -143,6 +143,30 @@ def _unload_i2v() -> None:
         pass
 
 
+def _ensure_ip_adapter(pipe, n: int = 1) -> None:
+    """Bring the shared preview pipe to EXACTLY n IP-Adapter encoders (n=0 clears it).
+
+    Cast-less scenes (no ref image) must run plain SDXL. Loading IP-Adapter at pipe init and then
+    omitting ip_adapter_image makes diffusers raise (encoder_hid_dim_type='ip_image_proj' requires
+    image_embeds). Match vivijure-backend keyframe._ensure_ip_adapter: load only when a ref exists."""
+    if getattr(pipe, "_vj_ip_loaded", 0) == n:
+        return
+    if getattr(pipe, "_vj_ip_loaded", 0):
+        pipe.unload_ip_adapter()
+        pipe._vj_ip_loaded = 0
+    if n:
+        try:
+            pipe.load_ip_adapter(
+                IP_ADAPTER_REPO,
+                subfolder=IP_ADAPTER_SUBFOLDER,
+                weight_name=IP_ADAPTER_WEIGHT,
+            )
+            pipe.set_ip_adapter_scale(0.7)
+            pipe._vj_ip_loaded = n
+        except Exception as e:  # noqa: BLE001
+            print(f"preview_sdxl: IP-Adapter load failed ({e}); prompt-only identity", flush=True)
+
+
 def _get_pipe(few_step: bool):
     """Return a process-cached SDXL pipeline configured for the card."""
     global _PIPE
@@ -154,21 +178,13 @@ def _get_pipe(few_step: bool):
 
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
     pipe = StableDiffusionXLPipeline.from_pretrained(DEFAULT_MODEL, torch_dtype=dtype)
+    pipe._vj_ip_loaded = 0
     if few_step:
         try:
             pipe.load_lora_weights(DISTILL_REPO, weight_name=DISTILL_WEIGHT, adapter_name="distill")
             pipe.set_adapters(["distill"], adapter_weights=[1.0])
         except Exception as e:  # noqa: BLE001
             print(f"preview_sdxl: Hyper-SD load failed ({e}); full-step only", flush=True)
-    try:
-        pipe.load_ip_adapter(
-            IP_ADAPTER_REPO,
-            subfolder=IP_ADAPTER_SUBFOLDER,
-            weight_name=IP_ADAPTER_WEIGHT,
-        )
-        pipe.set_ip_adapter_scale(0.7)
-    except Exception as e:  # noqa: BLE001
-        print(f"preview_sdxl: IP-Adapter load failed ({e}); prompt-only identity", flush=True)
 
     if torch.cuda.is_available():
         # sequential offload keeps RealVisXL under a 12GB ceiling alongside residual allocator state
@@ -338,11 +354,15 @@ def render_preview(
             "generator": torch.Generator(device="cpu").manual_seed(seed + i),
         }
         ref = _first_ref_image(bundle, scene)
-        if ref is not None and hasattr(pipe, "load_ip_adapter"):
+        ip_image = None
+        if ref is not None:
             try:
-                kwargs["ip_adapter_image"] = _open_bundle_image(ref, bundle.root)
+                ip_image = _open_bundle_image(ref, bundle.root)
             except Exception:
-                pass
+                ip_image = None
+        _ensure_ip_adapter(pipe, 1 if ip_image is not None else 0)
+        if ip_image is not None and getattr(pipe, "_vj_ip_loaded", 0):
+            kwargs["ip_adapter_image"] = ip_image
 
         image = pipe(**kwargs).images[0]
         out_path = workdir / "keyframes" / f"{shot_id}.png"
