@@ -80,3 +80,16 @@ def test_cancel_of_an_unknown_id_is_idempotently_true():
     reg = JobRegistry(lambda p, c: {})
     assert reg.cancel("does-not-exist") is True
     reg.shutdown()
+
+def test_raising_job_logs_failure_to_stderr(capsys):
+    def boom(payload, should_cancel):
+        raise RuntimeError("keyframe missing")
+
+    reg = JobRegistry(boom)
+    jid = reg.submit({})
+    job = _wait_for(reg, jid, JobStatus.FAILED)
+    assert "keyframe missing" in (job.error or "")
+    err = capsys.readouterr().err
+    assert f"vivijure-local: job {jid} FAILED:" in err
+    assert "keyframe missing" in err
+    reg.shutdown()

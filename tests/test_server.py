@@ -148,6 +148,36 @@ def test_i2v_run_fn_fetches_keyframe_animates_and_uploads_pointer(monkeypatch, t
     assert out["clip_key"] == "renders/My_Film/clips/shot_02_i2v.mp4" and out["num_frames"] == 49
 
 
+def test_i2v_run_fn_surfaces_clip_upload_failure(monkeypatch, tmp_path, capsys):
+    class FakeStore:
+        def get_file(self, key, dest):
+            Path(dest).write_bytes(b"png")
+            return dest
+
+        def put_file(self, src, key, content_type=None):
+            raise RuntimeError("Unauthorized")
+
+    import vivijure_local.i2v_cogvideox as eng
+    from vivijure_local.i2v_cogvideox import I2VResult
+
+    def fake_animate(shot_id, keyframe, prompt, cfg, out_path, *, progress_cb=None):
+        Path(out_path).write_bytes(b"mp4")
+        return I2VResult(shot_id=shot_id, path=Path(out_path), num_frames=49, fps=8, seconds=6.125, distilled=False)
+
+    monkeypatch.setattr(eng, "animate", fake_animate)
+    run = build_i2v_run_fn(FakeStore(), workdir=tmp_path)
+    try:
+        run({"action": "i2v_clip", "project": "My Film", "shot_id": "shot_02", "prompt": "x",
+             "config": {"quality": "draft"}}, lambda: False)
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as e:
+        assert "clip upload failed" in str(e)
+        assert "Unauthorized" in str(e)
+    err = capsys.readouterr().err
+    assert "clip upload failed" in err
+
+
+
 def test_preflight_r2_passes_when_all_present(monkeypatch):
     # all four required R2 vars set -> no exit, no message
     for k in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"):

@@ -5,6 +5,13 @@ onward (production-ready baseline).
 
 ## Unreleased
 
+
+### fix(i2v) -- honest clip-upload + job failure logs (local-12gb#99)
+
+- Wrap clip PUT in contextual `RuntimeError` + stderr (mirrors keyframe GET).
+- Log every handled job failure to stderr so `docker logs` shows the real error.
+
+
 ## v1.0.1 -- 2026-07-16
 
 PATCH release so production pins a **semver** consumer image that inherits the re-baked `runtime-t1`
