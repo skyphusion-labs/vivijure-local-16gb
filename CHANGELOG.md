@@ -5,6 +5,14 @@ onward (production-ready baseline).
 
 ## Unreleased
 
+## v1.0.2 -- 2026-07-22
+
+PATCH. Dual-door parity with vivijure-local-12gb#99 Defect 1.
+
+- **fix(i2v):** wrap clip PUT in contextual `RuntimeError` + stderr (mirrors keyframe GET).
+- **fix(jobs):** log every handled job failure to stderr so `docker logs` shows the real error.
+- `core/` remains byte-identical with vivijure-local-12gb v1.0.2.
+
 ## v1.0.1 -- 2026-07-16
 
 PATCH release so production pins a **semver** consumer image that inherits the re-baked `runtime-t1`

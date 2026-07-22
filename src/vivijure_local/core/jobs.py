@@ -152,6 +152,8 @@ class JobRegistry:
                     job.error = "canceled"
                     self._retain_locked(job_id)
             except Exception as e:  # noqa: BLE001 -- a render failure is DATA: record it, keep serving
+                import sys
+                print(f"vivijure-local: job {job_id} FAILED: {e}", file=sys.stderr, flush=True)
                 with self._lock:
                     job.status = JobStatus.FAILED
                     job.error = str(e)[:500]

@@ -173,7 +173,13 @@ def build_i2v_run_fn(store, *, workdir: Path | None = None, on_progress: Callabl
             result = animate(req.shot_id, local_kf, req.prompt, cfg, out_path, progress_cb=progress_cb)
 
             clip_key = clip_key_for(req.project, req.shot_id)
-            store.put_file(result.path, clip_key, content_type="video/mp4")
+            try:
+                store.put_file(result.path, clip_key, content_type="video/mp4")
+            except Exception as e:
+                import sys
+                msg = f"i2v_clip: clip upload failed ({clip_key!r}): {e}"
+                print(msg, file=sys.stderr, flush=True)
+                raise RuntimeError(msg) from e
             # Pointer-only return (small payload; R2 holds state), the exact shape readOutput expects.
             return {
                 "clip_key": clip_key,
