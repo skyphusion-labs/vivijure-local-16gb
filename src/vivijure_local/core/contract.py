@@ -56,6 +56,25 @@ def is_safe_lora_slot(slot: str) -> bool:
     return bool(_LORA_SLOT_RE.fullmatch(slot or ""))
 
 
+_KEYFRAME_KEY_RE = re.compile(
+    r"^renders/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*/keyframes/[A-Za-z0-9._-]+\.png$"
+)
+
+
+def is_safe_keyframe_key(key: str) -> bool:
+    """Canonical renders/.../keyframes/*.png shape with no traversal segments."""
+    if not key or not _KEYFRAME_KEY_RE.fullmatch(key):
+        return False
+    return ".." not in key.split("/")
+
+
+def keyframe_key_matches_project(key: str, project: str) -> bool:
+    """Explicit keyframe_key must sit under this project's slugged renders/ prefix."""
+    if not is_safe_keyframe_key(key):
+        return False
+    return key.startswith(f"renders/{_safe(project)}/keyframes/")
+
+
 def _str(v: object, default: str = "") -> str:
     return v if isinstance(v, str) else default
 
@@ -88,6 +107,11 @@ class I2VClipRequest:
         prompt (the motion description); without it the render is meaningless."""
         if not self.prompt:
             return "i2v_clip: prompt is required (the motion description)"
+        if self.keyframe_key and not keyframe_key_matches_project(self.keyframe_key, self.project):
+            return (
+                f"i2v_clip: keyframe_key must be under renders/{_safe(self.project)}/keyframes/ "
+                f"(got {self.keyframe_key!r})"
+            )
         return None
 
 
