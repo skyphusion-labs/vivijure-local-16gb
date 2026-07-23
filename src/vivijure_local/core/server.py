@@ -447,8 +447,11 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
             return h[7:] if h.lower().startswith("bearer ") else None
 
         def _body(self) -> dict | None:
-            length = int(self.headers.get("content-length") or 0)
-            if length > MAX_HTTP_BODY_BYTES:
+            try:
+                length = int(self.headers.get("content-length") or 0)
+            except (TypeError, ValueError):
+                return None
+            if length < 0 or length > MAX_HTTP_BODY_BYTES:
                 return {"__too_large__": True}
             if not length:
                 return None
