@@ -99,7 +99,7 @@ services:
   # docker-compose.override.yml sets command: ["tunnel","run"] (cloudflared reads TUNNEL_TOKEN), so the
   # tracked file stays the novice quick-tunnel default.
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2024.12.2
     restart: unless-stopped
     depends_on:
       init-shared:

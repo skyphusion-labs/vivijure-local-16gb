@@ -35,6 +35,8 @@ from .jobs import Cancelled, JobRegistry
 
 _SUPPORTED_ACTIONS = frozenset({"i2v_clip", "preview"})
 
+MAX_HTTP_BODY_BYTES = 1_048_576  # 1 MiB cap on POST bodies (K3: memory DoS)
+
 _STATUS_RE = re.compile(r"^/status/([A-Za-z0-9]+)$")
 _CANCEL_RE = re.compile(r"^/cancel/([A-Za-z0-9]+)$")
 
@@ -49,7 +51,13 @@ def token_error(headers_token: str | None, expected: str) -> tuple[int, dict] | 
     stay open for liveness; everything that can touch the GPU is gated."""
     if not expected:
         return 503, {"ok": False, "error": "LOCAL_BACKEND_TOKEN not configured: refusing to serve an open i2v endpoint (the tunnel is public)"}
-    if not headers_token or not hmac.compare_digest(headers_token, expected):
+    if not headers_token:
+        return 401, {"ok": False, "error": "unauthorized"}
+    try:
+        ok = hmac.compare_digest(headers_token, expected)
+    except (TypeError, UnicodeError):
+        return 401, {"ok": False, "error": "unauthorized"}
+    if not ok:
         return 401, {"ok": False, "error": "unauthorized"}
     return None
 
@@ -440,6 +448,8 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
 
         def _body(self) -> dict | None:
             length = int(self.headers.get("content-length") or 0)
+            if length > MAX_HTTP_BODY_BYTES:
+                return {"__too_large__": True}
             if not length:
                 return None
             try:
@@ -448,10 +458,16 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
                 return None
 
         def _dispatch(self, method: str) -> None:
-            status, payload = route(
-                method, self.path, self._body() if method == "POST" else None,
-                registry=registry, token=self._bearer(), expected_token=expected_token,
-            )
+            body = self._body() if method == "POST" else None
+            if isinstance(body, dict) and body.get("__too_large__"):
+                status, payload = 413, {"ok": False, "error": "request body too large"}
+            else:
+                status, payload = route(
+                    method,
+                    self.path,
+                    body,
+                    registry=registry, token=self._bearer(), expected_token=expected_token,
+                )
             data = json.dumps(payload).encode()
             self.send_response(status)
             self.send_header("content-type", "application/json")
