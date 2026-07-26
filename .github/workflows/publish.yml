@@ -16,11 +16,12 @@ name: Publish door image to GHCR
 # diffusers/transformers install does NOT run here. That is the runner-cost win: the slow bake happens
 # rarely (a toolchain bump or the monthly CVE floor), not on every release.
 #
-# Runner: the GitHub-hosted LARGER runner "vivijure-bake-local" (paid hosted-larger capacity, ~300GB
-# disk). Kept here even though the build is now thin: `pull: true` fetches the ~8GB runtime base FROM,
-# which unpacks larger than a standard ubuntu-latest runner's ~14GB free disk comfortably holds, so the
-# headroom is still worth it (Conrad ruling 2026-07-04: we pay for capacity, we use it). Still fork-safe
-# trivially: a hosted-larger runner is an ephemeral VM, AND this workflow triggers ONLY on v* tags +
+# Runner: Plane C self-hosted GPU pool (org group "vivijure-gpu-builds", labels [self-hosted, gpu];
+# doctrine: fleet-chezmoi docs/runbooks/gh-runner-doctrine.md). The GitHub-hosted larger runner
+# "vivijure-bake-local" this once used is retired (fc#754); do not reintroduce it. The build step below
+# runs NO pull:true (digest-pinned FROM, docker driver reuses the daemon cache), so the old disk-headroom
+# rationale no longer applies either. Fork-safe via the group workflow allowlist (exact-ref pinned, no
+# globs) plus the org fork-pr-contributor-approval backstop, and this workflow triggers ONLY on v* tags +
 # maintainer workflow_dispatch, which a fork cannot create, so packages:write is never exposed to a fork.
 #
 # NOTE vs vivijure-backend release.yml (the model): the backend BAKES ~90GB of weights (seed image, R2
