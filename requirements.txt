@@ -28,7 +28,7 @@ av==17.1.0                 # frame-accurate clip write. DO NOT bump to 18.x: av 
                            # base-image Python move. Dependabot ignore below.
 
 # --- object storage (shared vivijure R2 bucket) ---
-boto3==1.43.58
+boto3==1.43.62
 
 # --- local keyframe preview (action=preview / vivijure-local#153) ---
 PyYAML>=6.0.3
