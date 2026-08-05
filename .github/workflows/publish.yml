@@ -16,7 +16,7 @@ name: Publish door image to GHCR
 # diffusers/transformers install does NOT run here. That is the runner-cost win: the slow bake happens
 # rarely (a toolchain bump or the monthly CVE floor), not on every release.
 #
-# Runner: Plane C self-hosted GPU pool (org group "vivijure-gpu-builds", labels [self-hosted, gpu];
+# Runner: Plane C self-hosted GPU pool (org group "vivijure-gpu-builds", labels [self-hosted, bake-capable];
 # doctrine: fleet-chezmoi docs/runbooks/gh-runner-doctrine.md). The GitHub-hosted larger runner
 # "vivijure-bake-local" this once used is retired (fc#754); do not reintroduce it. The build step below
 # runs NO pull:true (digest-pinned FROM, docker driver reuses the daemon cache), so the old disk-headroom
@@ -81,7 +81,7 @@ jobs:
   build-and-push:
     needs: sync-gpu-allowlist
     if: always() && (needs.sync-gpu-allowlist.result == 'success' || needs.sync-gpu-allowlist.result == 'skipped')
-    runs-on: [self-hosted, gpu]
+    runs-on: [self-hosted, bake-capable]
     timeout-minutes: 60
     steps:
       - name: Checkout repository
