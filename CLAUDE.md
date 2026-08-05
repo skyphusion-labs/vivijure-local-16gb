@@ -8,28 +8,24 @@ Guidance for Claude Code (and the crew) working in this repo.
 does image-to-video on a SINGLE consumer GPU running in your own homelab, with **CogVideoX-5B-I2V**. The
 fidelity sibling of the LTX door ([vivijure-local-12gb](https://github.com/skyphusion-labs/vivijure-local-12gb),
 which trades fidelity for speed) and the deliberate opposite of
-[vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (the RunPod datacenter engine,
-Wan 2.2 on H200/B200): no rent, no cloud GPU, reached over a Cloudflare tunnel that terminates at the box.
+[vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (RunPod datacenter engine,
+Wan 2.2 on H200/B200 class): no rent, no cloud GPU, reached over a Cloudflare tunnel.
 
-**One studio, many doors.** The studio's `motion.backend` hook makes the clip engine pluggable; the
-control plane is unchanged and the user picks the door (rent datacenter GPU, or run it on silicon they
-already own -- LTX for speed, CogVideoX for fidelity). **Public repo** (`skyphusion-labs/vivijure-local-16gb`).
-**Production-ready** as of v1.0.0 (July 2026). AGPL-3.0-only.
+**One studio, many doors.** Studio panels (`vivijure-cf` / `vivijure-local`) use `motion.backend`;
+user picks the door (datacenter GPU, LTX for speed, CogVideoX for fidelity). **Public repo.**
+AGPL-3.0-only. Version / image pins: see git tags / GHCR / compose; do not freeze a version here as
+current forever (including "production-ready as of …").
 
 ```
-control plane --> local-gpu module (CF Worker) --/run--> CF tunnel --> THIS backend (CogVideoX-5B-I2V)
+vivijure-cf / vivijure-local --> local-gpu module --/run--> CF tunnel --> THIS (CogVideoX-5B-I2V)
 ```
 
 ## How it relates to the other doors
 
-Same studio hook (`motion.backend`), different engine + trade-off. `vivijure-backend` is the cloud door
-(RunPod serverless, Wan 2.2, datacenter cards, the `own-gpu` path); the LTX door and THIS CogVideoX door
-are local (your box, the `local-gpu` path). The studio talks to THIS server with the SAME job lifecycle
-it uses for RunPod (`/run` -> `/status/<id>` -> output), and the contract is byte-identical to the LTX
-door, so a self-hoster swaps the container without touching the studio. The tiers map to what the card
-can HONESTLY deliver: `final` is the card's ceiling, NOT datacenter parity, and the generation body
-raises a clear error rather than faking a clip when the GPU runtime is absent (a producer stage never
-ships a fake clip).
+Same studio hook (`motion.backend`), different engine + trade-off. Contract is byte-identical to the
+LTX door, so a self-hoster swaps the container without touching the studio. Tiers advertise only what
+the card can HONESTLY deliver: `final` is the card's ceiling, NOT datacenter parity. A producer stage
+never ships a fake clip when the GPU runtime is absent.
 
 ## Documentation map
 
@@ -131,9 +127,12 @@ run the benchmark on a RunPod COMMUNITY pod (secure cloud only; a hard rule).
 - Operating memory for the vivijure family lives in the per-project memory under
   `~/.claude/projects/-home-conrad-dev-vivijure/memory/` (`seg-vivijure-modules` covers the cost doors,
   `seg-vivijure-backend-deploy` the cloud counterpart); load it before acting.
-- **HARD AUP line:** the CSAM bright line is absolute (see the vivijure project memory). Non-negotiable.
+- **HARD AUP line:** the CSAM bright line is absolute. Non-negotiable.
+- **Ignore Cursor `AGENTS.md`.** Verify artifact not pipeline. Image pin discipline: versioned tags
+  for GHCR/compose. Never freeze constellation endpoint IDs in this file.
 
 ## Commits & versioning
 
-Conventional Commits (`feat(scope):`, `fix(scope):`, `docs:`); body explains the why. SemVer from
-**v1.0.0** onward (MAJOR for breaking API changes, MINOR for features, PATCH for fixes).
+Conventional Commits (`feat(scope):`, `fix(scope):`, `docs:`); body explains the why. SemVer on the
+1.x line (MAJOR for breaking API changes, MINOR for features, PATCH for fixes); see tags /
+`CHANGELOG.md`.
