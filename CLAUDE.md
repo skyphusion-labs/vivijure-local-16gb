@@ -136,3 +136,9 @@ run the benchmark on a RunPod COMMUNITY pod (secure cloud only; a hard rule).
 Conventional Commits (`feat(scope):`, `fix(scope):`, `docs:`); body explains the why. SemVer on the
 1.x line (MAJOR for breaking API changes, MINOR for features, PATCH for fixes); see tags /
 `CHANGELOG.md`.
+
+## Release / deploy
+
+**Tag-gated production deploy.** Merges to `main` run CI only; they do not ship production.
+Cut an annotated SemVer tag on `main` to release (`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`).
+Deploy workflows assert the tag commit is an ancestor of `origin/main`.
