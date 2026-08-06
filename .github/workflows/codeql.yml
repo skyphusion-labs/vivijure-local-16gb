@@ -1,14 +1,13 @@
 name: CodeQL
 
-# Estate standard: in-repo CodeQL for JS/TS + Actions. PR trigger unfiltered so
-# stacked PRs still get analysis. Schedule weekly.
+# Python/container repos: no npm lockfile. Actions + Python only.
 
 on:
   push:
     branches: [main]
   pull_request:
   schedule:
-    - cron: "20 4 * * 0"
+    - cron: "30 4 * * 0"
 
 permissions:
   actions: read
@@ -30,23 +29,10 @@ jobs:
         include:
           - language: actions
             build-mode: none
-          - language: javascript-typescript
+          - language: python
             build-mode: none
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        if: matrix.language == 'javascript-typescript'
-        with:
-          node-version: "22"
-          cache: npm
-      - name: Install dependencies
-        if: matrix.language == 'javascript-typescript'
-        run: |
-          set -euo pipefail
-          if [ -f package-lock.json ]; then npm ci
-          elif [ -f package.json ]; then npm install
-          else echo "no package.json; skipping install"
-          fi
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
@@ -54,3 +40,4 @@ jobs:
       - uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
+
