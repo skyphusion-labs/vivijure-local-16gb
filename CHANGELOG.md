@@ -5,6 +5,14 @@ onward (production-ready baseline).
 
 ## Unreleased
 
+### feat: SDXL cast `train_lora` on the door (1.1.0)
+
+- **feat:** `action: train_lora` fits UNet DreamBooth-LoRA from the cast train bundle on this card
+  (same RealVisXL base as `preview`); writes `loras/<project>/<slot>/pytorch_lora_weights.safetensors`.
+- **deps:** `peft==0.20.0` (thin image layer + requirements for next runtime-t).
+- Studio route (vivijure-core): prefer `LOCAL_BACKEND_URL` for SDXL cast train; no RunPod required.
+- **`__version__` -> 1.1.0** (release pin / compose bump at ship).
+
 ## v1.0.4 -- 2026-07-22
 
 PATCH. Cast-less keyframe preview fix (#153 / #111).

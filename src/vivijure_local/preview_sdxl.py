@@ -5,8 +5,8 @@ RunPod vivijure-backend for the keyframe phase. v1 scope:
 
   - RealVisXL + Hyper-SD few-step path (draft/standard); fuller steps on final
   - Per-shot prompts from the project bundle (style + scene + cast name triggers)
-  - Optional IP-Adapter identity from the first cast ref image (no DreamBooth train in v1)
-  - Optional pretrained LoRA adapters staged from R2 (`pretrained_loras`)
+  - Optional IP-Adapter identity from the first cast ref image
+  - Optional pretrained LoRA adapters staged from R2 (`pretrained_loras`); train via action=train_lora
   - Multi-character InstantID / regional anti-bleed deferred (prompt + first-slot IP-Adapter)
 
 Heavy imports (torch / diffusers / PIL) are deferred so CPU tests cover planning + bundle extract.
