@@ -189,6 +189,47 @@ def clip_key_for(project: str, shot_id: str) -> str:
     return f"renders/{_safe(project)}/clips/{_safe(shot_id)}_i2v.mp4"
 
 
+def lora_key_for(project: str, slot: str) -> str:
+    """Where a trained SDXL cast adapter lands. Matches vivijure-backend harness keys.lora_key so
+    preview `pretrained_loras` and the cast harvest path share one layout."""
+    return f"loras/{_safe(project)}/{_safe(slot)}/pytorch_lora_weights.safetensors"
+
+
+@dataclass
+class TrainLoraRequest:
+    """Standalone cast LoRA train (action=train_lora). Same wire shape as the control plane's
+    submitTrainLoraJob payload so the studio can POST the door without a cloud endpoint."""
+
+    project: str
+    bundle_key: str
+    render_overrides: dict = field(default_factory=dict)
+    model_family: str = "sdxl"
+
+    @classmethod
+    def from_input(cls, payload: dict) -> "TrainLoraRequest":
+        payload = payload or {}
+        family = _str(payload.get("model_family"), "sdxl").strip().lower() or "sdxl"
+        overrides = payload.get("render_overrides")
+        return cls(
+            project=_str(payload.get("project")) or "untitled",
+            bundle_key=_str(payload.get("bundle_key")),
+            render_overrides=overrides if isinstance(overrides, dict) else {},
+            model_family=family,
+        )
+
+    def validate(self) -> str | None:
+        if not self.bundle_key:
+            return "train_lora: bundle_key is required (no project bundle to fetch)"
+        if not is_safe_bundle_key(self.bundle_key):
+            return "train_lora: bundle_key must be a canonical bundles/... R2 key"
+        if self.model_family != "sdxl":
+            return (
+                f"train_lora: model_family {self.model_family!r} is not supported on this door "
+                "(SDXL only; Wan A14B train is not a local-consumer engine)"
+            )
+        return None
+
+
 def _safe(s: str) -> str:
     """Reduce a name to the SAME R2-safe path segment as the datacenter backend keys._slug
     (vivijure-backend), so a project never scatters across two slug spellings of its own name. A

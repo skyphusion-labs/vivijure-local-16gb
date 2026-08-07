@@ -100,6 +100,46 @@ def test_run_accepts_preview_when_authed():
     reg.shutdown()
 
 
+def test_run_accepts_train_lora_when_authed():
+    reg = _reg()
+    code, body = route(
+        "POST",
+        "/run",
+        {
+            "input": {
+                "action": "train_lora",
+                "project": "lora-cast-1-1",
+                "bundle_key": "bundles/lora-cast-1-1.tar.gz",
+                "model_family": "sdxl",
+            }
+        },
+        registry=reg,
+        token=TOK,
+        expected_token=TOK,
+    )
+    assert code == 200 and isinstance(body["id"], str)
+    reg.shutdown()
+
+
+def test_run_rejects_train_lora_wan_when_authed():
+    code, body = route(
+        "POST",
+        "/run",
+        {
+            "input": {
+                "action": "train_lora",
+                "project": "p",
+                "bundle_key": "bundles/p.tar.gz",
+                "model_family": "wan",
+            }
+        },
+        registry=_reg(),
+        token=TOK,
+        expected_token=TOK,
+    )
+    assert code == 400 and "SDXL only" in body["error"]
+
+
 def test_run_rejects_preview_without_bundle_key():
     code, body = route(
         "POST",

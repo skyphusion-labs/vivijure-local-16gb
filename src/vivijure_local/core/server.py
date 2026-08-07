@@ -3,7 +3,7 @@
 The local-gpu module worker talks to this exactly as own-gpu talks to RunPod -- same endpoints, same
 status envelope -- so the CF bridge is a near-clone and the control plane is unchanged:
 
-  POST /run            { "input": { action: i2v_clip|preview, ... } } -> { "id" }
+  POST /run            { "input": { action: i2v_clip|preview|train_lora, ... } } -> { "id" }
   GET  /status/<id>    -> { id, status: IN_QUEUE|IN_PROGRESS|COMPLETED|FAILED, output?, error? }
   POST /cancel/<id>    -> { ok: true }  (idempotent; an unknown id is also ok -- nothing is running)
   GET  /health         -> { ok: true, ... }   (liveness for the tunnel + the operator)
@@ -30,10 +30,10 @@ from typing import Callable
 from .. import __version__
 from .. import door
 from ..door import ENGINE, SERVICE, animate
-from .contract import I2VClipRequest, PreviewRequest, clip_key_for, keyframe_key_for
+from .contract import I2VClipRequest, PreviewRequest, TrainLoraRequest, clip_key_for, keyframe_key_for
 from .jobs import Cancelled, JobRegistry
 
-_SUPPORTED_ACTIONS = frozenset({"i2v_clip", "preview"})
+_SUPPORTED_ACTIONS = frozenset({"i2v_clip", "preview", "train_lora"})
 
 MAX_HTTP_BODY_BYTES = 1_048_576  # 1 MiB cap on POST bodies (K3: memory DoS)
 
@@ -91,17 +91,22 @@ def route(
             return err
         action = str(payload.get("action") or "i2v_clip")
         if action not in _SUPPORTED_ACTIONS:
-            # Local door serves i2v_clip (motion) + preview (keyframes, #153). Other actions are an
-            # honest 400, not a silent accept (the datacenter backend owns render/finish_clip).
+            # Local door serves i2v_clip (motion), preview (keyframes), and train_lora (SDXL cast).
+            # Other actions are an honest 400 (datacenter backend owns render/finish_clip / Wan train).
             return 400, {
                 "ok": False,
                 "error": (
                     f"unsupported action {action!r} "
-                    "(this backend serves i2v_clip and preview)"
+                    "(this backend serves i2v_clip, preview, and train_lora)"
                 ),
             }
         if action == "preview":
             req = PreviewRequest.from_input(payload)
+            reason = req.validate()
+            if reason:
+                return 400, {"ok": False, "error": reason}
+        elif action == "train_lora":
+            req = TrainLoraRequest.from_input(payload)
             reason = req.validate()
             if reason:
                 return 400, {"ok": False, "error": reason}
@@ -255,20 +260,56 @@ def build_preview_run_fn(
     return run
 
 
+def build_train_lora_run_fn(
+    store,
+    *,
+    workdir: Path | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> Callable[[dict, Callable[[], bool]], dict]:
+    """Build the SDXL cast-train worker: fetch bundle, fit adapters, upload R2 pointers."""
+    base = Path(workdir) if workdir else Path(tempfile.gettempdir())
+
+    def run(payload: dict, should_cancel: Callable[[], bool]) -> dict:
+        from .. import train_lora_job
+
+        req = TrainLoraRequest.from_input(payload)
+        reason = req.validate()
+        if reason:
+            raise ValueError(reason)
+
+        job_dir = Path(tempfile.mkdtemp(prefix="vj-train-lora-", dir=str(base)))
+        try:
+            return train_lora_job.run_train_lora(
+                req,
+                store,
+                job_dir,
+                should_cancel=should_cancel,
+                on_progress=on_progress,
+            )
+        finally:
+            import shutil
+            shutil.rmtree(job_dir, ignore_errors=True)
+
+    return run
+
+
 def build_run_fn(
     store,
     *,
     workdir: Path | None = None,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> Callable[[dict, Callable[[], bool]], dict]:
-    """Dispatch worker: `preview` -> SDXL keyframes; everything else -> i2v_clip."""
+    """Dispatch worker: preview / train_lora / i2v_clip."""
     i2v = build_i2v_run_fn(store, workdir=workdir, on_progress=on_progress)
     preview = build_preview_run_fn(store, workdir=workdir, on_progress=on_progress)
+    train = build_train_lora_run_fn(store, workdir=workdir, on_progress=on_progress)
 
     def run(payload: dict, should_cancel: Callable[[], bool]) -> dict:
         action = str((payload or {}).get("action") or "i2v_clip")
         if action == "preview":
             return preview(payload, should_cancel)
+        if action == "train_lora":
+            return train(payload, should_cancel)
         return i2v(payload, should_cancel)
 
     return run
