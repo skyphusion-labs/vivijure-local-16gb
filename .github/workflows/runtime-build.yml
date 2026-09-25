@@ -9,12 +9,17 @@ name: Build runtime base image to GHCR
 #   ghcr.io/skyphusion-labs/vivijure-local-16gb:runtime-t<N>   (a TAG in the same package)
 #
 # Unlike vivijure-backend's runtime-build there is NO seed image and NO snapshot runner: this door bakes
-# no model weights (CogVideoX pulls on the first render), so the base is a plain ~8GB build with no
-# disk-reclaim gymnastics.
+# no model weights (CogVideoX pulls on the first render), so the base is a plain ~8GB build. That used to mean
+# no disk-reclaim gymnastics; on a GitHub-hosted `ubuntu-latest` runner (roughly 14GB free out of the
+# box) an ~8GB base plus its build layers no longer fits comfortably, so a reclaim step now runs before
+# the build. It is still a reclaim, not the backend's bin-packing exercise.
 #
 # workflow_dispatch (a deliberate toolchain bump) + a monthly CVE-refresh floor. NEVER fork-reachable
-# (dispatch + schedule only), so packages:write is never exposed to a fork. Runs on Plane C
-# `[self-hosted, bake-capable]` (vivijure-gpu-builds; fc#754). GH heavy/vivijure-bake lanes retired by cost ruling.
+# (dispatch + schedule only), so packages:write is never exposed to a fork. Runs on GitHub-hosted
+# `ubuntu-latest`, the only live CI plane: Plane C `[self-hosted, bake-capable]` (vivijure-gpu-builds;
+# fc#754) went with the fleet decommission on 2026-09-24 (cost), and the GH heavy / vivijure-bake lanes
+# were retired earlier by the same cost ruling. A job pinned to either is not a slow job, it is a job
+# that QUEUES forever and silently, so do not reintroduce either label.
 
 on:
   workflow_dispatch:
@@ -48,13 +53,27 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: [self-hosted, bake-capable]
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Free disk space (hosted runner; the retired larger runners had the headroom this replaces)
+        if: runner.environment == 'github-hosted'
+        run: |
+          set -eu
+          echo "--- before ---"; df -h /
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf "${AGENT_TOOLSDIRECTORY:-}" || true
+          sudo docker image prune -af || true
+          echo "--- after ---"; df -h /
 
       - name: Assert commit is on main (no publish of an unreviewed release)
         run: |
