@@ -24,10 +24,20 @@ name: Publish door image to GHCR
 # pull:true (digest-pinned FROM, docker driver reuses the daemon cache), which caps the disk cost but
 # does not remove it; an ~8GB runtime base still has to land on a runner with roughly 14GB free, which
 # is less headroom than either predecessor had, so the disk-reclaim step below is REQUIRED and not
-# decoration. Doctrine: fleet-chezmoi docs/runbooks/gh-runner-doctrine.md. Fork-safe via the group
-# workflow allowlist (exact-ref pinned, no globs) plus the org fork-pr-contributor-approval
-# backstop, and this workflow triggers ONLY on v* tags + maintainer workflow_dispatch, which a fork
-# cannot create, so packages:write is never exposed to a fork.
+# decoration. Doctrine: fleet-chezmoi docs/runbooks/gh-runner-doctrine.md. Fork-safe via the org
+# fork-pr-contributor-approval backstop, and because this workflow triggers ONLY on v* tags +
+# maintainer workflow_dispatch, which a fork cannot create, so packages:write is never exposed to
+# a fork. (The runner-group workflow allowlist was a THIRD control here; it is gone with the pool,
+# and it protected the self-hosted runners, never this hosted job.)
+#
+# The `sync-gpu-allowlist` job that used to run here was REMOVED 2026-09-25 (runner-group
+# retirement lane, CR fleet-chezmoi#2160). It appended this repo's tag refs to the
+# `vivijure-gpu-builds` org runner group (id 9), the Plane C bake pool, which has had ZERO
+# runners since the 2026-09-24 fleet decommission. Its sync script was deleted from
+# fleet-chezmoi the same day (commit 0b5c8b4), so the job could no longer even succeed: it
+# would fail on the missing file and, through `needs`, SKIP the build-and-push job below. The group's 119
+# workflow refs and 8 repo pinnings are preserved untouched, so standing Plane C back up
+# re-adds this sync as part of provisioning the pool. Do not re-add it here.
 #
 # NOTE vs vivijure-backend release.yml (the model): the backend BAKES ~90GB of weights (seed image, R2
 # stage, bin-packed layers). This door BAKES NO weights (CogVideoX pulls on the first render into a
@@ -59,33 +69,7 @@ env:
   IMAGE: vivijure-local-16gb
 
 jobs:
-  # Inline sync (not workflow_call): public repos cannot call reusable workflows in
-  # internal fleet-chezmoi (workflow validation fails with 0 jobs).
-  sync-gpu-allowlist:
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout fleet-chezmoi (sync script)
-        uses: actions/checkout@v7
-        with:
-          repository: skyphusion-labs/fleet-chezmoi
-          ref: main
-          token: ${{ secrets.RUNNER_GROUP_ADMIN_TOKEN }}
-
-      - name: Sync vivijure-gpu-builds allowlist
-        env:
-          GH_TOKEN: ${{ secrets.RUNNER_GROUP_ADMIN_TOKEN }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          bash scripts/sync-vivijure-gpu-builds-allowlist.sh \
-            --apply \
-            --ensure-tag "vivijure-local-16gb" "$REF_NAME"
-
   build-and-push:
-    needs: sync-gpu-allowlist
-    if: always() && (needs.sync-gpu-allowlist.result == 'success' || needs.sync-gpu-allowlist.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
