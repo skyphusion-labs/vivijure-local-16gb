@@ -13,7 +13,7 @@
 #
 # RUNTIME BASE, pinned by TAG (and, once runtime-build.yml has run, by @sha256 digest for reproducible
 # builds). runtime-build.yml auto-opens a PR that repins this line to tag@digest.
-ARG RUNTIME_REF=ghcr.io/skyphusion-labs/vivijure-local-16gb:runtime-t1@sha256:796a2655bcc83987f1711bd4b6e1451757cdc05394396ef88520940c1f0c6320
+ARG RUNTIME_REF=ghcr.io/skyphusion-labs/vivijure-local-16gb:runtime-t1@sha256:3f3dcf947387fca4fd07c1a73d3c14074af3c3e46630fa2043765f5f3b7bfe1e
 FROM ${RUNTIME_REF}
 
 WORKDIR /app
