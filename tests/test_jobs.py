@@ -93,3 +93,70 @@ def test_raising_job_logs_failure_to_stderr(capsys):
     assert f"vivijure-local: job {jid} FAILED:" in err
     assert "keyframe missing" in err
     reg.shutdown()
+
+
+def test_log_jobs_is_silent_unless_enabled(monkeypatch, capsys):
+    monkeypatch.delenv("LOG_JOBS", raising=False)
+    reg = JobRegistry(lambda payload, should_cancel: {"ok": True})
+    jid = reg.submit({"project": "p", "shot_id": "s", "action": "i2v_clip", "token": "s3cret-token"})
+    _wait_for(reg, jid, JobStatus.COMPLETED)
+    reg.shutdown()
+    out = capsys.readouterr().out
+    assert "vj-local" not in out
+    assert "s3cret-token" not in out
+
+
+def test_log_jobs_emits_submit_and_completed_without_the_payload(monkeypatch, capsys):
+    monkeypatch.setenv("LOG_JOBS", "1")
+    reg = JobRegistry(lambda payload, should_cancel: {"ok": True})
+    jid = reg.submit({
+        "project": "lighthouse dawn",
+        "shot_id": "shot_01",
+        "action": "i2v_clip",
+        "token": "s3cret-token",
+        "prompt": "do not log this prompt",
+    })
+    _wait_for(reg, jid, JobStatus.COMPLETED)
+    reg.shutdown()
+    out = capsys.readouterr().out
+    assert f"vj-local job={jid} project=lighthouse_dawn shot=shot_01 action=i2v_clip event=submit" in out
+    assert f"vj-local job={jid} project=lighthouse_dawn shot=shot_01 action=i2v_clip event=COMPLETED" in out
+    assert "s3cret-token" not in out
+    assert "do not log this prompt" not in out
+
+
+def test_log_jobs_failed_reason_omits_exception_text(monkeypatch, capsys):
+    monkeypatch.setenv("LOG_JOBS", "1")
+
+    def boom(payload, should_cancel):
+        raise RuntimeError("token=s3cret-token leaked in the exception")
+
+    reg = JobRegistry(boom)
+    jid = reg.submit({"project": "p", "shot_id": "s", "action": "preview"})
+    _wait_for(reg, jid, JobStatus.FAILED)
+    reg.shutdown()
+    out = capsys.readouterr().out
+    assert f"vj-local job={jid} project=p shot=s action=preview event=FAILED reason=error" in out
+    assert "s3cret-token" not in out
+    assert "leaked" not in out
+
+
+def test_log_jobs_names_a_queued_cancel(monkeypatch, capsys):
+    monkeypatch.setenv("LOG_JOBS", "1")
+    release = threading.Event()
+
+    def blocker(payload, should_cancel):
+        release.wait(2.0)
+        return {"ok": True}
+
+    reg = JobRegistry(blocker)
+    first = reg.submit({"project": "p", "shot_id": "a", "action": "i2v_clip"})
+    _wait_for(reg, first, JobStatus.IN_PROGRESS)
+    second = reg.submit({"project": "p", "shot_id": "b", "action": "i2v_clip"})
+    assert reg.cancel(second) is True
+    _wait_for(reg, second, JobStatus.FAILED)
+    release.set()
+    _wait_for(reg, first, JobStatus.COMPLETED)
+    reg.shutdown()
+    out = capsys.readouterr().out
+    assert f"vj-local job={second} project=p shot=b action=i2v_clip event=FAILED reason=canceled_before_start" in out
