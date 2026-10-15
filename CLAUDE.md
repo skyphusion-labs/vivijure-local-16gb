@@ -46,19 +46,18 @@ the matching doc.
 ## The job API (RunPod-compatible, `src/vivijure_local/core/server.py`)
 
 ```
-POST /run          { "input": { action:"i2v_clip", project, shot_id, prompt, keyframe_key?, config } } -> { "id" }
+POST /run          { "input": { action:"i2v_clip"|"preview"|"train_lora", ... } } -> { "id" }
 GET  /status/<id>  -> { id, status: IN_QUEUE|IN_PROGRESS|COMPLETED|FAILED, output?, error? }
 POST /cancel/<id>  -> { ok: true }   (idempotent)
 GET  /health       -> { ok: true, engine:"cogvideox", ... }
 POST /run { "selftest": true } -> a no-GPU transport probe
 ```
 
-The server owns an in-process **serial** job registry (a consumer card runs ONE i2v job at a time), the
-RunPod-lifecycle stand-in for a box with no serverless platform. CogVideoX-5B-I2V is a FIXED-GRID model
-(720x480, 49 frames @ 8 fps), so the tiers differ by inference STEPS, not resolution or length: `draft`
-(30 steps), `standard` (40 steps), `final` (50 steps), all at 49 frames with model
-CPU offload + VAE tiling/slicing. **VRAM floor + per-clip speed are MEASURED** (docs/proof/RESULTS.md):
-the honest floor is a 16GB card, and the tier speeds in the docs are the benchmark numbers.
+Actions: `i2v_clip` (CogVideoX motion), `preview` (SDXL keyframes), `train_lora` (SDXL cast UNet LoRA
+on this card; Wan family is rejected). Serial job registry: one GPU job at a time. CogVideoX-5B-I2V is
+a FIXED-GRID model (720x480, 49 frames @ 8 fps); tiers differ by inference STEPS (`draft` 30 /
+`standard` 40 / `final` 50) with model CPU offload + VAE tiling/slicing. **VRAM floor + per-clip
+speed are MEASURED** (docs/proof/RESULTS.md).
 
 ## Commands
 
@@ -136,3 +135,9 @@ run the benchmark on a RunPod COMMUNITY pod (secure cloud only; a hard rule).
 Conventional Commits (`feat(scope):`, `fix(scope):`, `docs:`); body explains the why. SemVer on the
 1.x line (MAJOR for breaking API changes, MINOR for features, PATCH for fixes); see tags /
 `CHANGELOG.md`.
+
+## Release / deploy
+
+**Tag-gated production deploy.** Merges to `main` run CI only; they do not ship production.
+Cut an annotated SemVer tag on `main` to release (`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`).
+Deploy workflows assert the tag commit is an ancestor of `origin/main`.

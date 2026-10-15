@@ -20,6 +20,9 @@ WORKDIR /app
 
 # Our package. This is the ONLY layer that changes on a src-only release, so it is the only re-push.
 COPY src /app/src
+# train_lora needs peft; install here so a src-only release gains it without waiting for the next
+# runtime-t rebuild (requirements.txt already pins peft for the next runtime bake).
+RUN pip3 install --no-cache-dir 'peft==0.20.0'
 ENV PYTHONPATH=/app/src \
     HOST=0.0.0.0 \
     PORT=8000
