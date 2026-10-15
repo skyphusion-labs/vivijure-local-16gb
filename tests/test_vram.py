@@ -40,3 +40,11 @@ def test_env_to_fraction_end_to_end_torch_free():
     assert vram.vram_fraction(vram.parse_max_vram_gb("15"), 24.0) == 15.0 / 24.0
     assert vram.vram_fraction(vram.parse_max_vram_gb("32"), 16.0) == 1.0   # clamp >card to full
     assert vram.vram_fraction(vram.parse_max_vram_gb(""), 16.0) is None    # unset = no-op
+
+
+def test_vram_free_shortfall_is_true_only_when_free_is_below_the_cap():
+    assert vram.vram_free_shortfall(11.5, 8.0) is True
+    assert vram.vram_free_shortfall(11.5, 11.5) is False
+    assert vram.vram_free_shortfall(11.5, 18.0) is False
+    assert vram.vram_free_shortfall(None, 8.0) is False
+    assert vram.vram_free_shortfall(11.5, 0.0) is False
