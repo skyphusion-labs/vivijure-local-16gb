@@ -54,6 +54,62 @@ def test_apply_vram_cap_is_a_noop_without_cuda(monkeypatch):
     assert logs == []
 
 
+class _FakeCuda:
+    def __init__(self, free_bytes, total_bytes, info_error=None):
+        self.free_bytes = free_bytes
+        self.total_bytes = total_bytes
+        self.info_error = info_error
+        self.calls = []
+
+    def current_device(self):
+        return 0
+
+    def mem_get_info(self, index):
+        if self.info_error is not None:
+            raise self.info_error
+        return (self.free_bytes, self.total_bytes)
+
+    def get_device_properties(self, index):
+        return type("Props", (), {"total_memory": self.total_bytes})()
+
+    def set_per_process_memory_fraction(self, fraction, index):
+        self.calls.append((fraction, index))
+
+
+def test_apply_vram_cap_warns_when_free_is_below_the_cap(monkeypatch):
+    monkeypatch.setenv("VIVIJURE_MAX_VRAM_GB", "11.5")
+    gib = 1024 ** 3
+    device = _FakeCuda(free_bytes=8 * gib, total_bytes=20 * gib)
+    logs = []
+    fraction = apply_vram_cap(logger=logs.append, device=device)
+    assert fraction == 11.5 / 20
+    assert device.calls == [(fraction, 0)]
+    assert any("8.0GB free" in line for line in logs)
+    assert any(line.startswith("WARNING: VIVIJURE_MAX_VRAM_GB is 11.5GB") for line in logs)
+
+
+def test_apply_vram_cap_logs_free_when_the_card_can_hold_the_cap(monkeypatch):
+    monkeypatch.setenv("VIVIJURE_MAX_VRAM_GB", "11.5")
+    gib = 1024 ** 3
+    device = _FakeCuda(free_bytes=18 * gib, total_bytes=20 * gib)
+    logs = []
+    fraction = apply_vram_cap(logger=logs.append, device=device)
+    assert fraction == 11.5 / 20
+    assert any("18.0GB free" in line for line in logs)
+    assert not any(line.startswith("WARNING:") for line in logs)
+
+
+def test_apply_vram_cap_still_caps_when_free_cannot_be_read(monkeypatch):
+    monkeypatch.setenv("VIVIJURE_MAX_VRAM_GB", "11")
+    gib = 1024 ** 3
+    device = _FakeCuda(free_bytes=0, total_bytes=16 * gib, info_error=RuntimeError("no info"))
+    logs = []
+    fraction = apply_vram_cap(logger=logs.append, device=device)
+    assert fraction == 11 / 16
+    assert any("free VRAM could not be read" in line for line in logs)
+    assert any("free unread" in line for line in logs)
+
+
 def test_i2v_run_refuses_when_no_token_configured_503():
     # The whole point: behind a public tunnel, an unconfigured backend must NOT serve i2v.
     code, body = route("POST", "/run", _run_body(), registry=_reg(), token=None, expected_token="")
