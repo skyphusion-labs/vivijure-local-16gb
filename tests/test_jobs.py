@@ -160,3 +160,73 @@ def test_log_jobs_names_a_queued_cancel(monkeypatch, capsys):
     reg.shutdown()
     out = capsys.readouterr().out
     assert f"vj-local job={second} project=p shot=b action=i2v_clip event=FAILED reason=canceled_before_start" in out
+
+
+def test_audit_line_does_not_hold_the_registry_lock(monkeypatch):
+    monkeypatch.setenv("LOG_JOBS", "1")
+    import vivijure_local.core.jobs as jobs
+
+    def watch(registry, seen):
+        def wrapped(job_id, payload, event, reason=None):
+            got = registry._lock.acquire(blocking=False)
+            seen.append((event, got))
+            if got:
+                registry._lock.release()
+
+        monkeypatch.setattr(jobs, "_audit_line", wrapped)
+
+    def wait_seen(n):
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            if len(seen) >= n:
+                return
+            time.sleep(0.01)
+        raise AssertionError(seen)
+
+    seen = []
+    reg = JobRegistry(lambda payload, should_cancel: {"ok": True})
+    watch(reg, seen)
+    done = reg.submit({"project": "p", "shot_id": "s", "action": "i2v_clip"})
+    _wait_for(reg, done, JobStatus.COMPLETED)
+    wait_seen(2)
+    reg.shutdown()
+
+    def boom(payload, should_cancel):
+        raise RuntimeError("boom")
+
+    reg_fail = JobRegistry(boom)
+    watch(reg_fail, seen)
+    failed = reg_fail.submit({"project": "p", "shot_id": "s", "action": "preview"})
+    _wait_for(reg_fail, failed, JobStatus.FAILED)
+    wait_seen(4)
+    reg_fail.shutdown()
+
+    release = threading.Event()
+
+    def blocker(payload, should_cancel):
+        release.wait(2.0)
+        return {"ok": True}
+
+    reg_cancel = JobRegistry(blocker)
+    watch(reg_cancel, seen)
+    first = reg_cancel.submit({"project": "p", "shot_id": "a", "action": "i2v_clip"})
+    _wait_for(reg_cancel, first, JobStatus.IN_PROGRESS)
+    second = reg_cancel.submit({"project": "p", "shot_id": "b", "action": "i2v_clip"})
+    assert reg_cancel.cancel(second) is True
+    _wait_for(reg_cancel, second, JobStatus.FAILED)
+    release.set()
+    _wait_for(reg_cancel, first, JobStatus.COMPLETED)
+    wait_seen(8)
+    reg_cancel.shutdown()
+
+    assert [event for event, _held in seen] == [
+        "submit",
+        "COMPLETED",
+        "submit",
+        "FAILED",
+        "submit",
+        "submit",
+        "FAILED",
+        "COMPLETED",
+    ]
+    assert all(held for _event, held in seen)

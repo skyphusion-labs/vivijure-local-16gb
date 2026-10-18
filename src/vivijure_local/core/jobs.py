@@ -132,12 +132,13 @@ class JobRegistry:
                 job.status = JobStatus.FAILED
                 job.error = "canceled before start"
                 self._retain_locked(job_id)
-                _audit_line(job.id, job.payload, "FAILED", "canceled before start")
-                return True
-            if job.status is JobStatus.IN_PROGRESS:
-                job._cancel = True  # cooperative: the worker aborts at the next checkpoint
-                return True
-            return True  # already COMPLETED / FAILED
+                audit = (job.id, job.payload, "FAILED", "canceled before start")
+            else:
+                if job.status is JobStatus.IN_PROGRESS:
+                    job._cancel = True  # cooperative: the worker aborts at the next checkpoint
+                return True  # in progress, or already COMPLETED / FAILED
+        _audit_line(*audit)
+        return True
 
     # --- worker loop ---------------------------------------------------------------------------
 
@@ -161,9 +162,13 @@ class JobRegistry:
                     job.status = JobStatus.FAILED
                     job.error = "canceled before start"
                     self._retain_locked(job_id)
-                    _audit_line(job.id, job.payload, "FAILED", "canceled before start")
-                    continue
-                job.status = JobStatus.IN_PROGRESS
+                    audit = (job.id, job.payload, "FAILED", "canceled before start")
+                else:
+                    job.status = JobStatus.IN_PROGRESS
+                    audit = None
+            if audit is not None:
+                _audit_line(*audit)
+                continue
 
             # Run OUTSIDE the lock so /status and /cancel stay responsive during a long render.
             try:
@@ -172,13 +177,15 @@ class JobRegistry:
                     job.output = output
                     job.status = JobStatus.COMPLETED
                     self._retain_locked(job_id)
-                    _audit_line(job.id, job.payload, "COMPLETED")
+                    audited_id, audited_payload = job.id, job.payload
+                _audit_line(audited_id, audited_payload, "COMPLETED")
             except Cancelled:
                 with self._lock:
                     job.status = JobStatus.FAILED
                     job.error = "canceled"
                     self._retain_locked(job_id)
-                    _audit_line(job.id, job.payload, "FAILED", "canceled")
+                    audit = (job.id, job.payload, "FAILED", "canceled")
+                _audit_line(*audit)
             except Exception as e:  # noqa: BLE001 -- a render failure is DATA: record it, keep serving
                 import sys
                 print(f"vivijure-local: job {job_id} FAILED: {e}", file=sys.stderr, flush=True)
@@ -186,7 +193,8 @@ class JobRegistry:
                     job.status = JobStatus.FAILED
                     job.error = str(e)[:500]
                     self._retain_locked(job_id)
-                    _audit_line(job.id, job.payload, "FAILED", "error")
+                    audit = (job.id, job.payload, "FAILED", "error")
+                _audit_line(*audit)
 
     def _is_cancelled(self, job_id: str) -> bool:
         with self._lock:
