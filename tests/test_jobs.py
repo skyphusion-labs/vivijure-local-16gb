@@ -162,16 +162,38 @@ def test_log_jobs_names_a_queued_cancel(monkeypatch, capsys):
     assert f"vj-local job={second} project=p shot=b action=i2v_clip event=FAILED reason=canceled_before_start" in out
 
 
+def _caller_released_the_lock(lock):
+    """True when this thread can take the lock.
+
+    A lock this thread already holds never succeeds, because Lock is not reentrant.
+    Another thread may hold it for one critical section, so a single miss is retried.
+    A miss on every attempt means the caller is still inside the lock.
+    """
+    for _ in range(8):
+        if lock.acquire(blocking=False):
+            lock.release()
+            return True
+        time.sleep(0.005)
+    return False
+
+
+def test_caller_released_stays_false_while_this_thread_holds_the_lock():
+    lock = threading.Lock()
+    lock.acquire()
+    try:
+        assert _caller_released_the_lock(lock) is False
+    finally:
+        lock.release()
+    assert _caller_released_the_lock(lock) is True
+
+
 def test_audit_line_does_not_hold_the_registry_lock(monkeypatch):
     monkeypatch.setenv("LOG_JOBS", "1")
     import vivijure_local.core.jobs as jobs
 
     def watch(registry, seen):
         def wrapped(job_id, payload, event, reason=None):
-            got = registry._lock.acquire(blocking=False)
-            seen.append((event, got))
-            if got:
-                registry._lock.release()
+            seen.append((event, _caller_released_the_lock(registry._lock)))
 
         monkeypatch.setattr(jobs, "_audit_line", wrapped)
 
@@ -184,10 +206,16 @@ def test_audit_line_does_not_hold_the_registry_lock(monkeypatch):
         raise AssertionError(seen)
 
     seen = []
-    reg = JobRegistry(lambda payload, should_cancel: {"ok": True})
+    finished = threading.Event()
+
+    def finish(payload, should_cancel):
+        finished.set()
+        return {"ok": True}
+
+    reg = JobRegistry(finish)
     watch(reg, seen)
-    done = reg.submit({"project": "p", "shot_id": "s", "action": "i2v_clip"})
-    _wait_for(reg, done, JobStatus.COMPLETED)
+    reg.submit({"project": "p", "shot_id": "s", "action": "i2v_clip"})
+    assert finished.wait(2.0)
     wait_seen(2)
     reg.shutdown()
 
@@ -196,30 +224,31 @@ def test_audit_line_does_not_hold_the_registry_lock(monkeypatch):
 
     reg_fail = JobRegistry(boom)
     watch(reg_fail, seen)
-    failed = reg_fail.submit({"project": "p", "shot_id": "s", "action": "preview"})
-    _wait_for(reg_fail, failed, JobStatus.FAILED)
+    reg_fail.submit({"project": "p", "shot_id": "s", "action": "preview"})
     wait_seen(4)
     reg_fail.shutdown()
 
     release = threading.Event()
+    started = threading.Event()
 
     def blocker(payload, should_cancel):
+        started.set()
         release.wait(2.0)
         return {"ok": True}
 
     reg_cancel = JobRegistry(blocker)
     watch(reg_cancel, seen)
-    first = reg_cancel.submit({"project": "p", "shot_id": "a", "action": "i2v_clip"})
-    _wait_for(reg_cancel, first, JobStatus.IN_PROGRESS)
+    reg_cancel.submit({"project": "p", "shot_id": "a", "action": "i2v_clip"})
+    assert started.wait(2.0)
     second = reg_cancel.submit({"project": "p", "shot_id": "b", "action": "i2v_clip"})
     assert reg_cancel.cancel(second) is True
-    _wait_for(reg_cancel, second, JobStatus.FAILED)
     release.set()
-    _wait_for(reg_cancel, first, JobStatus.COMPLETED)
     wait_seen(8)
     reg_cancel.shutdown()
 
-    assert [event for event, _held in seen] == [
+    # submit and the terminal line race: the worker can finish before the
+    # submit audit on the calling thread is appended. The lock result does not.
+    assert sorted(event for event, _held in seen) == sorted([
         "submit",
         "COMPLETED",
         "submit",
@@ -228,5 +257,5 @@ def test_audit_line_does_not_hold_the_registry_lock(monkeypatch):
         "submit",
         "FAILED",
         "COMPLETED",
-    ]
+    ])
     assert all(held for _event, held in seen)

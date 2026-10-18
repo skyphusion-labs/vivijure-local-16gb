@@ -288,6 +288,8 @@ same as leaving it blank. Note the cap is a ceiling, not a discount: if you set 
 actually needs, that tier will OOM -- drop to a lower tier (`final` -> `standard` -> `draft`), switch to
 sequential offload, or raise the cap. The startup log prints the applied cap.
 
+`LOG_JOBS=1` prints one stdout line per job event (submit, completed, failed, canceled). The gate is exactly `1`. `true`, `yes`, and `on` stay silent. The line never includes the job payload.
+
 ### Troubleshooting
 
 - **"no CUDA device" / the backend never goes LIVE:** the container can't see your GPU. Install the
