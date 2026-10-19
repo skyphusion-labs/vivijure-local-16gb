@@ -1,4 +1,6 @@
 """The in-process async job registry: lifecycle, failure-as-data, and cancel (no GPU)."""
+import ast
+import pathlib
 import threading
 import time
 
@@ -162,100 +164,117 @@ def test_log_jobs_names_a_queued_cancel(monkeypatch, capsys):
     assert f"vj-local job={second} project=p shot=b action=i2v_clip event=FAILED reason=canceled_before_start" in out
 
 
-def _caller_released_the_lock(lock):
-    """True when this thread can take the lock.
+# --- the audit line must never be emitted while holding the registry lock ---------------------
+#
+# This is a fact about the SOURCE, so it is asserted against the source. A runtime probe (patch
+# _audit_line, then call `registry._lock.acquire(blocking=False)` from inside it) cannot tell
+# "the caller holds the lock" from "another thread holds it", so it reds at random against
+# correct code; it also only ever sees the call sites a given test happens to execute. The walk
+# below is deterministic, covers EVERY call site in the module, and no timing can defeat it.
+#
+# Lexical containment is the property: a call written inside the `with` body. A helper DEFINED
+# inside the body and called later would not be flagged, and that shape does not exist here.
 
-    A lock this thread already holds never succeeds, because Lock is not reentrant.
-    Another thread may hold it for one critical section, so a single miss is retried.
-    A miss on every attempt means the caller is still inside the lock.
-    """
-    for _ in range(8):
-        if lock.acquire(blocking=False):
-            lock.release()
-            return True
-        time.sleep(0.005)
-    return False
-
-
-def test_caller_released_stays_false_while_this_thread_holds_the_lock():
-    lock = threading.Lock()
-    lock.acquire()
-    try:
-        assert _caller_released_the_lock(lock) is False
-    finally:
-        lock.release()
-    assert _caller_released_the_lock(lock) is True
+_BLOCKING_CALLS = ("_audit_line", "print")
 
 
-def test_audit_line_does_not_hold_the_registry_lock(monkeypatch):
-    monkeypatch.setenv("LOG_JOBS", "1")
+def _called_name(node):
+    """The bare name of a call's target, or None when the node is not a call."""
+    if not isinstance(node, ast.Call):
+        return None
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    return None
+
+
+def _self_attr_name(node):
+    """The attribute name of a `self.X` expression, else None."""
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "self":
+        return node.attr
+    return None
+
+
+def _lock_attr_names(tree):
+    """`self._lock`, plus any Condition built on it: a Condition holds the SAME lock."""
+    names = {"_lock"}
+    while True:
+        before = set(names)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Assign) and _called_name(node.value) == "Condition"):
+                continue
+            if not any(_self_attr_name(arg) in names for arg in node.value.args):
+                continue
+            for target in node.targets:
+                held = _self_attr_name(target)
+                if held is not None:
+                    names.add(held)
+        if names == before:
+            return names
+
+
+def _lock_blocks(tree, lock_names):
+    """Every `with self.<lock>:` statement in the tree."""
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.With, ast.AsyncWith))
+        and any(_self_attr_name(item.context_expr) in lock_names for item in node.items)
+    ]
+
+
+def _blocking_calls_under_lock(tree, lock_names):
+    """Blocking calls lexically inside a lock-holding `with` body, as sorted (name, lineno)."""
+    found = set()
+    for block in _lock_blocks(tree, lock_names):
+        for stmt in block.body:
+            for node in ast.walk(stmt):
+                name = _called_name(node)
+                if name in _BLOCKING_CALLS:
+                    found.add((name, node.lineno))
+    return sorted(found)
+
+
+# A known-defective source. The walk must flag this, or a clean verdict on the real module would
+# only prove the instrument is blind.
+_DEFECTIVE = """
+class R:
+    def __init__(self):
+        self._lock = threading.Lock()
+
+    def submit(self, payload):
+        with self._lock:
+            _audit_line("id", payload, "submit")
+"""
+
+
+def test_no_blocking_call_sits_inside_the_registry_lock():
     import vivijure_local.core.jobs as jobs
 
-    def watch(registry, seen):
-        def wrapped(job_id, payload, event, reason=None):
-            seen.append((event, _caller_released_the_lock(registry._lock)))
+    # Positive control first.
+    fixture = ast.parse(_DEFECTIVE)
+    flagged = _blocking_calls_under_lock(fixture, _lock_attr_names(fixture))
+    assert [name for name, _lineno in flagged] == ["_audit_line"], flagged
 
-        monkeypatch.setattr(jobs, "_audit_line", wrapped)
+    # Assert on the source of the module that is actually IMPORTED, not on a guessed path.
+    path = pathlib.Path(jobs.__file__)
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    lock_names = _lock_attr_names(tree)
 
-    def wait_seen(n):
-        deadline = time.time() + 2
-        while time.time() < deadline:
-            if len(seen) >= n:
-                return
-            time.sleep(0.01)
-        raise AssertionError(seen)
+    # Denominators. If the lock or the audit helper is renamed, fail loudly here rather than pass
+    # vacuously on a walk that found nothing to inspect.
+    assert "_lock" in lock_names, lock_names
+    assert len(_lock_blocks(tree, lock_names)) >= 5, path
+    audit_sites = sorted(n.lineno for n in ast.walk(tree) if _called_name(n) == "_audit_line")
+    assert len(audit_sites) >= 5, audit_sites
 
-    seen = []
-    finished = threading.Event()
-
-    def finish(payload, should_cancel):
-        finished.set()
-        return {"ok": True}
-
-    reg = JobRegistry(finish)
-    watch(reg, seen)
-    reg.submit({"project": "p", "shot_id": "s", "action": "i2v_clip"})
-    assert finished.wait(2.0)
-    wait_seen(2)
-    reg.shutdown()
-
-    def boom(payload, should_cancel):
-        raise RuntimeError("boom")
-
-    reg_fail = JobRegistry(boom)
-    watch(reg_fail, seen)
-    reg_fail.submit({"project": "p", "shot_id": "s", "action": "preview"})
-    wait_seen(4)
-    reg_fail.shutdown()
-
-    release = threading.Event()
-    started = threading.Event()
-
-    def blocker(payload, should_cancel):
-        started.set()
-        release.wait(2.0)
-        return {"ok": True}
-
-    reg_cancel = JobRegistry(blocker)
-    watch(reg_cancel, seen)
-    reg_cancel.submit({"project": "p", "shot_id": "a", "action": "i2v_clip"})
-    assert started.wait(2.0)
-    second = reg_cancel.submit({"project": "p", "shot_id": "b", "action": "i2v_clip"})
-    assert reg_cancel.cancel(second) is True
-    release.set()
-    wait_seen(8)
-    reg_cancel.shutdown()
-
-    # submit and the terminal line race: the worker can finish before the
-    # submit audit on the calling thread is appended. The lock result does not.
-    assert sorted(event for event, _held in seen) == sorted([
-        "submit",
-        "COMPLETED",
-        "submit",
-        "FAILED",
-        "submit",
-        "submit",
-        "FAILED",
-        "COMPLETED",
-    ])
-    assert all(held for _event, held in seen)
+    under_lock = _blocking_calls_under_lock(tree, lock_names)
+    assert under_lock == [], (
+        "blocking call inside a lock-holding `with` in "
+        + str(path)
+        + ": "
+        + repr(under_lock)
+        + ". A blocked stdout stalls the serial registry. Copy what the line needs, leave the "
+        "lock, then emit."
+    )
