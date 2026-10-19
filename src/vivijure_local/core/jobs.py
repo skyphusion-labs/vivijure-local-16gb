@@ -18,6 +18,7 @@ fake worker and no GPU.
 """
 from __future__ import annotations
 
+import os
 import threading
 import uuid
 from collections import deque
@@ -62,6 +63,28 @@ class Job:
 RunFn = Callable[[dict, Callable[[], bool]], dict]
 
 
+def _audit_field(value: object) -> str:
+    """One log token. Only a string is copied, and whitespace cannot break the line."""
+    if not isinstance(value, str):
+        return "-"
+    text = "_".join(value.split())
+    return text or "-"
+
+
+def _audit_line(job_id: str, payload: object, event: str, reason: str | None = None) -> None:
+    """One stdout line when LOG_JOBS=1. Off by default. Never prints the payload."""
+    if os.environ.get("LOG_JOBS") != "1":
+        return
+    data = payload if isinstance(payload, dict) else {}
+    project = _audit_field(data.get("project"))
+    shot = _audit_field(data.get("shot_id"))
+    action = _audit_field(data.get("action"))
+    line = f"vj-local job={job_id} project={project} shot={shot} action={action} event={event}"
+    if reason is not None:
+        line += f" reason={_audit_field(reason)}"
+    print(line, flush=True)
+
+
 class JobRegistry:
     """Serial single-worker job runner with RunPod-compatible status. Thread-safe."""
 
@@ -85,6 +108,7 @@ class JobRegistry:
             self._queue.append(job.id)
             self._ensure_worker_locked()
             self._wake.notify()
+        _audit_line(job.id, job.payload, "submit")
         return job.id
 
     def get(self, job_id: str) -> Job | None:
@@ -108,11 +132,13 @@ class JobRegistry:
                 job.status = JobStatus.FAILED
                 job.error = "canceled before start"
                 self._retain_locked(job_id)
-                return True
-            if job.status is JobStatus.IN_PROGRESS:
-                job._cancel = True  # cooperative: the worker aborts at the next checkpoint
-                return True
-            return True  # already COMPLETED / FAILED
+                audit = (job.id, job.payload, "FAILED", "canceled before start")
+            else:
+                if job.status is JobStatus.IN_PROGRESS:
+                    job._cancel = True  # cooperative: the worker aborts at the next checkpoint
+                return True  # in progress, or already COMPLETED / FAILED
+        _audit_line(*audit)
+        return True
 
     # --- worker loop ---------------------------------------------------------------------------
 
@@ -136,8 +162,13 @@ class JobRegistry:
                     job.status = JobStatus.FAILED
                     job.error = "canceled before start"
                     self._retain_locked(job_id)
-                    continue
-                job.status = JobStatus.IN_PROGRESS
+                    audit = (job.id, job.payload, "FAILED", "canceled before start")
+                else:
+                    job.status = JobStatus.IN_PROGRESS
+                    audit = None
+            if audit is not None:
+                _audit_line(*audit)
+                continue
 
             # Run OUTSIDE the lock so /status and /cancel stay responsive during a long render.
             try:
@@ -146,11 +177,15 @@ class JobRegistry:
                     job.output = output
                     job.status = JobStatus.COMPLETED
                     self._retain_locked(job_id)
+                    audited_id, audited_payload = job.id, job.payload
+                _audit_line(audited_id, audited_payload, "COMPLETED")
             except Cancelled:
                 with self._lock:
                     job.status = JobStatus.FAILED
                     job.error = "canceled"
                     self._retain_locked(job_id)
+                    audit = (job.id, job.payload, "FAILED", "canceled")
+                _audit_line(*audit)
             except Exception as e:  # noqa: BLE001 -- a render failure is DATA: record it, keep serving
                 import sys
                 print(f"vivijure-local: job {job_id} FAILED: {e}", file=sys.stderr, flush=True)
@@ -158,6 +193,8 @@ class JobRegistry:
                     job.status = JobStatus.FAILED
                     job.error = str(e)[:500]
                     self._retain_locked(job_id)
+                    audit = (job.id, job.payload, "FAILED", "error")
+                _audit_line(*audit)
 
     def _is_cancelled(self, job_id: str) -> bool:
         with self._lock:
