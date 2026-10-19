@@ -1,0 +1,120 @@
+name: Bake runtime image on a RunPod pod
+
+# Dispatch only. A run rents a CPU pod, so nothing here is on a schedule.
+# cpu3c, 4 vCPU, secure cloud. Catalog price on 2026-10-19 was $0.03 per
+# vCPU per hour, $0.12 per hour of compute, plus container disk until the
+# job terminates the pod. No network volume is attached.
+#
+# The repo secret RUNPOD_API_KEY must exist before the first dispatch.
+# The job token pushes the image to GHCR. It is not printed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type bake to rent the pod.'
+        required: true
+        type: string
+      toolchain_version:
+        description: 'Toolchain version. The tag is runtime-t<N>.'
+        required: true
+        default: '1'
+        type: string
+      disk_gb:
+        description: 'Container disk in GB (20 to 160). 40 fits this ~8 GB runtime image.'
+        required: true
+        default: '40'
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+
+concurrency:
+  group: runpod-bake-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Refuse unless confirm is bake
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          set -eu
+          if [ "$CONFIRM" != "bake" ]; then
+            echo "::error::confirm must be the word bake. Nothing was rented."
+            exit 1
+          fi
+
+      - name: Assert commit is on main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::commit $GITHUB_SHA is not on origin/main"
+            exit 1
+          fi
+
+      - name: Resolve tag
+        id: cfg
+        run: |
+          set -eu
+          TVER='${{ github.event.inputs.toolchain_version }}'
+          case "${TVER}" in ''|*[!0-9]*) echo "::error::toolchain_version must be a positive integer"; exit 1;; esac
+          echo "tag=runtime-t${TVER}" >> "$GITHUB_OUTPUT"
+          echo "immutable_tag=runtime-t${TVER}-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push on a pod
+        id: bake
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISK_GB: ${{ github.event.inputs.disk_gb }}
+        run: |
+          set -eu
+          python3 scripts/runpod_image_bake.py run \
+            --name "bake-${GITHUB_RUN_ID}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --sha "${GITHUB_SHA}" \
+            --dockerfile deploy/runtime.Dockerfile \
+            --destination "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.cfg.outputs.tag }}" \
+            --destination-immutable "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.cfg.outputs.immutable_tag }}" \
+            --disk-gb "$DISK_GB" \
+            --ghcr-user "${GITHUB_ACTOR}" \
+            --digest-out "$RUNNER_TEMP/digest.txt" \
+            --pod-id-out "$RUNNER_TEMP/pod-id.txt" \
+            --timeout-minutes 100
+          echo "digest=$(tr -d ' \n\r' < "$RUNNER_TEMP/digest.txt")" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the RUNTIME_REF repin pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          NEWREF="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.cfg.outputs.tag }}@${{ steps.bake.outputs.digest }}"
+          BRANCH="auto/runtime-repin"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B "${BRANCH}" origin/main
+          sed -i "s|ARG RUNTIME_REF=.*|ARG RUNTIME_REF=${NEWREF}|" deploy/Dockerfile
+          if git diff --quiet -- deploy/Dockerfile; then
+            echo "deploy/Dockerfile already pins ${NEWREF}."
+            exit 0
+          fi
+          git add deploy/Dockerfile
+          git commit -m "build(bake): repin RUNTIME_REF to the re-baked runtime base"
+          git push --force origin HEAD:refs/heads/auto/runtime-repin
+          gh pr create --base main --head "${BRANCH}" \
+            --title "build(bake): repin RUNTIME_REF to the re-baked runtime base" \
+            --body "Automated RUNTIME_REF digest bump from a RunPod pod bake. New base: ${NEWREF}. Merge through the gate. Fixed branch, so a later bake updates this pull request." \
+            || gh pr view "${BRANCH}" --json url >/dev/null
