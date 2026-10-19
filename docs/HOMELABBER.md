@@ -286,7 +286,7 @@ VIVIJURE_MAX_VRAM_GB=16
 Leave it blank to use the whole card (the default). A value at or above your card's real size is the
 same as leaving it blank. Note the cap is a ceiling, not a discount: if you set it below what a tier
 actually needs, that tier will OOM -- drop to a lower tier (`final` -> `standard` -> `draft`), switch to
-sequential offload, or raise the cap. The startup log prints the applied cap.
+sequential offload, or raise the cap. The startup log prints the applied cap and the free memory it saw, and it warns when free memory is below the cap.
 
 `LOG_JOBS=1` prints one stdout line per job event (submit, completed, failed, canceled). The gate is exactly `1`. `true`, `yes`, and `on` stay silent. The line never includes the job payload.
 

@@ -5,6 +5,11 @@ parse + fraction math here is PURE (no torch, no CUDA) so it unit-tests on a CPU
 call that enforces it (`torch.cuda.set_per_process_memory_fraction`) lives at server startup
 (`server.apply_vram_cap`), applied BEFORE any model load.
 
+The fraction is of the card total, because that is what
+`torch.cuda.set_per_process_memory_fraction` applies. `vram_free_shortfall` only answers whether the
+free memory just read can hold the cap. `server.apply_vram_cap` reports that at startup. The cap does
+not shrink to the free remainder.
+
 The card FIT itself is not estimated here: the tier table in `config.py` ships only configs PROVEN on
 real silicon at this door's VRAM budget (docs/proof/RESULTS.md), and every request is clamped to those
 tier ceilings. (A scaffold-era pre-load VRAM estimator used to live in this module; it was never wired
@@ -41,3 +46,13 @@ def vram_fraction(gb: float | None, total_gb: float) -> float | None:
     if gb is None or gb <= 0 or total_gb <= 0:
         return None
     return min(1.0, gb / total_gb)
+
+
+def vram_free_shortfall(gb: float | None, free_gb: float) -> bool:
+    """True when a positive cap is larger than the free memory just read.
+
+    free_gb <= 0 means the read is unusable, so this returns False instead of warning on a zero.
+    """
+    if gb is None or gb <= 0 or free_gb <= 0:
+        return False
+    return free_gb < gb
