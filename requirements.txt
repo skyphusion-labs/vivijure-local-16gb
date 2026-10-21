@@ -32,7 +32,7 @@ boto3==1.43.108
 
 # --- local keyframe preview (action=preview / vivijure-local#153) ---
 PyYAML>=6.0.3
-Pillow>=12.3.0
+Pillow>=13.0.0
 
 # --- local SDXL cast train (action=train_lora) ---
 peft==0.21.2               # UNet LoRA adapters; same pin as vivijure-backend
