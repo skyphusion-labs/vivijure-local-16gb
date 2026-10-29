@@ -12,6 +12,7 @@ from typing import Callable
 from .core.bundle import extract_bundle
 from .core.contract import TrainLoraRequest, lora_key_for
 from .lora_train import config_from_overrides, train_slot
+from .preview_sdxl import resolve_keyframe_model
 
 
 def _unload_card() -> None:
@@ -79,7 +80,10 @@ def run_train_lora(
             f"rank={cfg.rank} steps_cap={cfg.max_steps} (SDXL on this card).",
             flush=True,
         )
-        trained = train_slot(char, out_dir, config=cfg, progress_cb=progress_cb)
+        trained = train_slot(
+            char, out_dir, config=cfg, progress_cb=progress_cb,
+            base_repo=resolve_keyframe_model(req.render_overrides),
+        )
         key = lora_key_for(req.project, char.slot)
         store.put_file(trained.path, key, content_type="application/octet-stream")
         result_lora[char.slot] = {"lora_id": key}

@@ -23,7 +23,9 @@ from typing import Callable
 from .core.bundle import Bundle, build_prompt, extract_bundle
 from .core.contract import PreviewRequest, is_safe_lora_key, is_safe_lora_slot, keyframe_key_for
 
-_ALLOWED_KEYFRAME_MODELS = frozenset({"SG161222/RealVisXL_V5.0"})
+KEYFRAME_PHOTOREAL = "SG161222/RealVisXL_V5.0"
+KEYFRAME_ANIME = "cagliostrolab/animagine-xl-4.0"
+_ALLOWED_KEYFRAME_MODELS = frozenset({KEYFRAME_PHOTOREAL, KEYFRAME_ANIME})
 _ALLOWED_DISTILL_REPOS = frozenset({"ByteDance/Hyper-SD"})
 _ALLOWED_DISTILL_WEIGHTS = frozenset({"Hyper-SDXL-8steps-CFG-lora.safetensors"})
 _MAX_IMAGE_PIXELS = 4096 * 4096
@@ -47,8 +49,31 @@ def _env_allowlisted(name: str, default: str, allowlist: frozenset[str]) -> str:
 
 
 DEFAULT_MODEL = _env_allowlisted(
-    "VIVIJURE_KEYFRAME_MODEL", "SG161222/RealVisXL_V5.0", _ALLOWED_KEYFRAME_MODELS
+    "VIVIJURE_KEYFRAME_MODEL", KEYFRAME_PHOTOREAL, _ALLOWED_KEYFRAME_MODELS
 )
+
+
+def resolve_keyframe_model(overrides: dict | None = None) -> str:
+    """Pick the SDXL base for this job. style=anime wins. Else an allowlisted base_model."""
+    kf = None
+    if isinstance(overrides, dict):
+        inner = overrides.get("keyframe")
+        kf = inner if isinstance(inner, dict) else overrides
+    if isinstance(kf, dict):
+        if kf.get("style") == "anime":
+            return KEYFRAME_ANIME
+        raw = kf.get("base_model")
+        if isinstance(raw, str) and raw.strip():
+            rid = raw.strip()
+            if rid not in _ALLOWED_KEYFRAME_MODELS:
+                raise ValueError(
+                    f"keyframe base_model {rid!r} is not allowlisted; "
+                    f"permitted: {sorted(_ALLOWED_KEYFRAME_MODELS)}"
+                )
+            return rid
+    return DEFAULT_MODEL
+
+
 DISTILL_REPO = _env_allowlisted("VIVIJURE_KEYFRAME_DISTILL_REPO", "ByteDance/Hyper-SD", _ALLOWED_DISTILL_REPOS)
 DISTILL_WEIGHT = _env_allowlisted(
     "VIVIJURE_KEYFRAME_DISTILL_WEIGHT",
@@ -63,6 +88,7 @@ DEFAULT_NEGATIVE = (
 )
 
 _PIPE = None  # process-cached SDXL pipe (or None after unload)
+_PIPE_MODEL = None
 
 
 @dataclass(frozen=True)
@@ -120,8 +146,9 @@ def plan_shots(bundle: Bundle, process_shot_ids: list[str] | None) -> list[str]:
 
 def unload_preview() -> None:
     """Drop the cached SDXL pipe and free CUDA so i2v can claim the card."""
-    global _PIPE
+    global _PIPE, _PIPE_MODEL
     _PIPE = None
+    _PIPE_MODEL = None
     try:
         import torch
 
@@ -179,17 +206,19 @@ def _ensure_ip_adapter(pipe, n: int = 1) -> None:
             raise RuntimeError(f"preview_sdxl: IP-Adapter load failed ({e})") from e
 
 
-def _get_pipe(few_step: bool):
+def _get_pipe(few_step: bool, model: str = DEFAULT_MODEL):
     """Return a process-cached SDXL pipeline configured for the card."""
-    global _PIPE
+    global _PIPE, _PIPE_MODEL
     import torch
     from diffusers import StableDiffusionXLPipeline
 
-    if _PIPE is not None:
+    if _PIPE is not None and _PIPE_MODEL == model:
         return _PIPE
+    if _PIPE is not None:
+        unload_preview()
 
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-    pipe = StableDiffusionXLPipeline.from_pretrained(DEFAULT_MODEL, torch_dtype=dtype)
+    pipe = StableDiffusionXLPipeline.from_pretrained(model, torch_dtype=dtype)
     pipe._vj_ip_loaded = 0
     if few_step:
         try:
@@ -205,6 +234,7 @@ def _get_pipe(few_step: bool):
         except Exception:
             pipe.to("cuda")
     _PIPE = pipe
+    _PIPE_MODEL = model
     return pipe
 
 
@@ -337,14 +367,17 @@ def render_preview(
             src = _resolve_bundle_path(bundle.root, scene.start_image)
             if src.is_file():
                 start_images[shot_id] = src
-    staged = _stage_pretrained_loras(req, store, workdir)
+    model = resolve_keyframe_model(req.render_overrides)
+    staged = (
+        {} if model == KEYFRAME_ANIME else _stage_pretrained_loras(req, store, workdir)
+    )
 
     print(
         "vivijure-local: preview job -- loading SDXL keyframe weights (cold box may download "
-        f"{DEFAULT_MODEL}; this is NOT a hang).",
+        f"{model}; this is NOT a hang).",
         flush=True,
     )
-    pipe = _get_pipe(params.few_step)
+    pipe = _get_pipe(params.few_step, model)
     lora_names = _bind_pretrained_loras(pipe, staged)
 
     seed = 0
