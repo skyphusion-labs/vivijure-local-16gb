@@ -2,7 +2,7 @@
 # without torch/diffusers/boto3 -- those are deferred-imported in the engine + R2 + server modules and
 # pod-validated on the card (see docs/live-benchmark-plan.md). So the CPU suite needs just pytest plus
 # pytest-cov for the coverage workflow (code-coverage.yml).
-pytest>=9.1.1
+pytest>=9.2.0
 pytest-cov>=7.1.0
 PyYAML>=6.0.3
 Pillow>=12.3.0
