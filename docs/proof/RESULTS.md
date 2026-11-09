@@ -50,7 +50,7 @@ has slightly MORE usable headroom than the raw cap):
 
 ## Real-content confirmation + shipped default cap (2026-07-15)
 
-Follow-up on **physical silicon** (not RunPod): **NVIDIA RTX 4000 SFF Ada, 20GB**, the the retired homelab host
+Follow-up on **physical silicon** (not RunPod): **NVIDIA RTX 4000 SFF Ada, 20GB**, the retired homelab host
 standing door, real lighthouse keyframe content (not the synthetic gradient).
 
 | check | result |
