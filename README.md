@@ -235,7 +235,7 @@ so homelabbers on real 16GB cards do not OOM (see `VIVIJURE_MAX_VRAM_GB`).
 | `final` | 720x480 | 49 (~6.1s) | 50 | 13.57 GB | ~299s (~5 min) | ~850s (~14 min, estimated from step count) |
 
 The 4090 numbers are from the July 2026 proof gate ([docs/proof/RESULTS.md](docs/proof/RESULTS.md)).
-The Ada column is the honest **homelab baseline** (propagandhi standing door, July 2026); `final` is
+The Ada column is the honest **homelab baseline** (the retired homelab host standing door, July 2026); `final` is
 extrapolated from the measured standard tier (~17s/step).
 
 The older 25-frame draft benchmark remains in `docs/proof/RESULTS.md` as historical evidence, but
