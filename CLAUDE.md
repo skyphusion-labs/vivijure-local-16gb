@@ -39,7 +39,7 @@ the matching doc.
 - `docs/live-benchmark-plan.md` -- the costed, spend-gated plan for the on-card benchmark (executed 2026-07-01).
 - `docs/proof/RESULTS.md` -- the validated fit/speed numbers (populated; the 16GB floor proof).
 - `deploy/runtime.Dockerfile` + `.github/workflows/runtime-build.yml` -- the heavy CUDA/torch/deps
-  RUNTIME BASE (tag `runtime-t<N>`) built rarely on the larger runner; `deploy/Dockerfile` is
+  RUNTIME BASE (tag `runtime-t<N>`) built rarely on GitHub-hosted `ubuntu-latest`; `deploy/Dockerfile` is
   `FROM runtime@digest` + COPY src so a src-only release is a thin, fast, cheap build.
 - `docs/RUN-LOG.md` -- the running build/validation log.
 
@@ -113,10 +113,9 @@ run the benchmark on a RunPod COMMUNITY pod (secure cloud only; a hard rule).
 - **A producer stage never ships a fake clip.** The generation body raises a clear error when the GPU
   runtime is absent rather than faking output; tiers advertise only what a consumer card honestly delivers.
 - **Prove-then-name.** The public repo name encodes the proven VRAM tier (16GB), measured on real silicon.
-- Minimal runtime deps. The `requirements.txt` diffusers/transformers pins are the LTX door's validated
-  cu124 set, KEPT here because CogVideoXImageToVideoPipeline is present at diffusers 0.32.2 (verified).
-  torch/torchvision install from the CUDA index in `deploy/Dockerfile` (matched to the card), NOT pinned
-  in `requirements.txt`.
+- Minimal runtime deps. `requirements.txt` pins diffusers 0.38.0 and transformers 4.57.6 (S8 re-pin;
+  CogVideoXImageToVideoPipeline loads on that diffusers). torch/torchvision install from the CUDA index
+  in `deploy/Dockerfile` (matched to the card), NOT pinned in `requirements.txt`.
 
 ## Crew + identity
 
@@ -124,8 +123,8 @@ run the benchmark on a RunPod COMMUNITY pod (secure cloud only; a hard rule).
   (loads their `$HOME`, their `~/dev/vivijure-local-16gb` clone, their gh / R2 creds). Commits and
   PRs land under the member's `skyphusion-<member>` identity, never Conrad's.
 - Operating memory for the vivijure family lives in the per-project memory under
-  `~/.claude/projects/-home-conrad-dev-vivijure/memory/` (`seg-vivijure-modules` covers the cost doors,
-  `seg-vivijure-backend-deploy` the cloud counterpart); load it before acting.
+  `~/.claude/projects/-home-conrad-dev-vivijure/memory/` (`seg-vivijure-pipeline` covers modules and
+  the local doors, `seg-vivijure-backend-deploy` the cloud counterpart); load it before acting.
 - **HARD AUP line:** the CSAM bright line is absolute. Non-negotiable.
 - **Ignore Cursor `AGENTS.md`.** Verify artifact not pipeline. Image pin discipline: versioned tags
   for GHCR/compose. Never freeze constellation endpoint IDs in this file.
@@ -140,4 +139,4 @@ Conventional Commits (`feat(scope):`, `fix(scope):`, `docs:`); body explains the
 
 **Tag-gated production deploy.** Merges to `main` run CI only; they do not ship production.
 Cut an annotated SemVer tag on `main` to release (`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`).
-Deploy workflows assert the tag commit is an ancestor of `origin/main`.
+`runtime-build.yml` refuses a commit that is not an ancestor of `origin/main`. `publish.yml` (the `v*` tag image push) does not repeat that check.
