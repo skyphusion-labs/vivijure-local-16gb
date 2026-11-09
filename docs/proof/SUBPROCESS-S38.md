@@ -7,7 +7,7 @@ the caller (cloudflared -> the local-gpu module fetch) timed it out on a HEALTHY
 (#77, merged in #78): isolate the render in a persistent worker SUBPROCESS so the HTTP process never
 shares the render's GIL. This is the live proof, measured 2026-07-12.
 
-**Card:** propagandhi, NVIDIA RTX 4000 SFF Ada Generation, 20 GiB (the standing-door box; the SAME card
+**Card:** the retired homelab host, NVIDIA RTX 4000 SFF Ada Generation, 20 GiB (the standing-door box; the SAME card
 the S37 stall was measured on, so the before/after is apples-to-apples).
 **Image:** the subprocess build from merged `main` (be47283), rebuilt locally on the box for the window
 (byte-identical to the code that ships as `:0.4.0`). Engine `CogVideoXImageToVideoPipeline` +
@@ -88,7 +88,7 @@ Only moving the render out of the HTTP process removes the shared GIL, which the
 
 ## Reproducibility
 
-- Box: propagandhi (RTX 4000 SFF Ada, 20 GiB), the standing 16gb door stack (`docker compose`, watchdog,
+- Box: the retired homelab host (RTX 4000 SFF Ada, 20 GiB), the standing 16gb door stack (`docker compose`, watchdog,
   cloudflared, `/models` weights cache volume).
 - Build: `git pull` to merged `main`, `docker compose build vivijure-local-16gb` (only the source layer
   rebuilds; torch/diffusers layers are cached), then `docker compose up -d --no-deps vivijure-local-16gb`.
