@@ -3,12 +3,11 @@
 The **local-consumer** render backend for Vivijure, fidelity variant: image-to-video on a **single
 16GB consumer GPU** running **CogVideoX-5B-I2V** in your own homelab. **Production-ready** as of
 **v1.0.0** (July 2026): proven on real silicon, wired to the Vivijure Studio `local-gpu` module, and
-safe to run beside a production control panel.
+safe to run beside a studio you already run.
 
 The higher-fidelity sibling of the
 [LTX door](https://github.com/skyphusion-labs/vivijure-local-12gb) (12GB, lean + fast) and the
-deliberate opposite of [vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (the
-RunPod datacenter engine, Wan 2.2 on H200/B200).
+deliberate opposite of [vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (the RunPod keyframe engine).
 
 > **16GB floor, PROVEN.** Fit and quality were measured on real hardware (cap-sweep on RTX 4090, then
 > real-content confirmation on RTX 4000 Ada under the shipped **15.5GB VRAM cap**). The full 49-frame
@@ -62,20 +61,18 @@ flowchart TD
 
     subgraph modules[Modules: one job each, opt-in]
         cloudmods[Cloud video modules<br/>Seedance, Kling, Veo, Wan, ...]
-        finishmods[Finish modules<br/>upscale, smooth, lip-sync, titles]
+        finishmods[Finish modules<br/>upscale, smooth, titles]
         audiomods[Audio modules<br/>music, narration]
     end
 
     subgraph gpu[The GPU render engines]
-        backend[vivijure-backend<br/>RunPod cloud GPU:<br/>keyframes, image-to-video, LoRA training]
+        backend[vivijure-backend<br/>RunPod cloud GPU:<br/>SDXL keyframes]
         local12[vivijure-local-12gb<br/>your own 12GB card LTX]
         local16[vivijure-local-16gb<br/>your own 16GB card CogVideoX]
     end
 
     subgraph finish[Finish helper engines]
-        musetalk[vivijure-musetalk<br/>lip-sync]
         upscale[vivijure-upscale<br/>video upscale]
-        audioup[vivijure-audio-upscale<br/>audio cleanup]
     end
 
     discord --> slate
@@ -84,10 +81,7 @@ flowchart TD
     studio --> cloudmods
     studio --> finishmods
     studio --> audiomods
-    cloudmods --> backend
-    finishmods --> musetalk
     finishmods --> upscale
-    audiomods --> audioup
     studio --> backend
     studio --> local12
     studio --> local16
@@ -196,7 +190,7 @@ Copy `.env.example` to `.env` and fill it in. Every setting is an environment va
 | Var | Required | Default | What it does |
 |---|---|---|---|
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | yes | -- | The one credential: the shared-R2 key (read the keyframe, write the clip). Scope it to the bucket. |
-| `R2_BUCKET` | no | `vivijure` | The shared bucket name. |
+| `R2_BUCKET` | **yes** | (`.env.example` sets `vivijure`) | The shared bucket name. The server refuses to start without it. For MinIO, also set `R2_S3_ENDPOINT` ([docs/CONFIGURATION.md](docs/CONFIGURATION.md)). |
 | `LOCAL_BACKEND_TOKEN` | no | auto-generated | The bearer token every i2v request must carry (the tunnel is public). Blank => a strong one is generated and printed in the banner; set it for a stable token across restarts. |
 | `TUNNEL_TOKEN` | no | quick tunnel | A Cloudflare named-tunnel token for a STABLE hostname (also needs the `docker-compose.override.yml` from HOMELABBER "A stable address"). Blank => a zero-config TryCloudflare quick tunnel (URL changes each restart). |
 | `VIVIJURE_MAX_VRAM_GB` | no | **15.5** | Cap the VRAM vivijure claims, in GB. The backend pins torch to that fraction at startup (before model load). The shipped default is **15.5GB** so a 16GB card cannot OOM from opportunistic allocator growth; 49-frame tiers complete under this cap with model CPU offload (see `docs/proof/RESULTS.md`). On a 24GB+ card, raise in `.env` or set >= your card size for the full card. |
@@ -263,7 +257,7 @@ door. Run whichever fits your card and your patience.
 
 ## The job API (RunPod-compatible)
 
-A long-running server (`src/vivijure_local/server.py`) the `local-gpu` module talks to exactly as
+A long-running server (`src/vivijure_local/core/server.py`) the `local-gpu` module talks to exactly as
 `own-gpu` talks to RunPod:
 
 ```
@@ -309,7 +303,7 @@ makes the i2v endpoint refuse to serve). The backend holds no studio secrets and
 
 Homelab builders with a **16GB consumer GPU** who want higher-fidelity Vivijure image-to-video (CogVideoX-5B) locally without RunPod rent.
 
-**Vivijure Studio:** https://vivijure.dev · **Live demo:** https://demo.vivijure.com · **Skyphusion Labs:** https://skyphusion.org
+**Vivijure Studio:** https://vivijure.dev · **Skyphusion Labs:** https://skyphusion.org
 
 ## Support
 

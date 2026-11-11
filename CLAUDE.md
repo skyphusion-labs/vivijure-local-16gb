@@ -8,8 +8,7 @@ Guidance for Claude Code (and the crew) working in this repo.
 does image-to-video on a SINGLE consumer GPU running in your own homelab, with **CogVideoX-5B-I2V**. The
 fidelity sibling of the LTX door ([vivijure-local-12gb](https://github.com/skyphusion-labs/vivijure-local-12gb),
 which trades fidelity for speed) and the deliberate opposite of
-[vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (RunPod datacenter engine,
-Wan 2.2 on H200/B200 class): no rent, no cloud GPU, reached over a Cloudflare tunnel.
+[vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (the RunPod keyframe engine): no rent, no cloud GPU, reached over a Cloudflare tunnel.
 
 **One studio, many doors.** Studio panels (`vivijure-cf` / `vivijure-local`) use `motion.backend`;
 user picks the door (datacenter GPU, LTX for speed, CogVideoX for fidelity). **Public repo.**
@@ -73,8 +72,8 @@ python -m py_compile src/vivijure_local/*.py
 
 # Run it on a GPU box (one command): caches the CogVideoX weights on first start, then serves :8000 + its tunnel.
 cp .env.example .env                    # your R2 creds (+ optional LOCAL_BACKEND_TOKEN)
-docker compose up -d                    # builds deploy/Dockerfile; the `ready` service prints the copy-paste URL + token
-curl localhost:8000/health
+docker compose up -d                    # pulls the pinned GHCR image; the `ready` service prints the copy-paste URL + token
+docker compose ps                       # 8000 is internal only; the healthcheck probes /health inside
 
 # The on-card proof gate (spend-gated; does NOT run without a GPU):
 python scripts/benchmark.py             # CogVideoX i2v across the three tiers: fit (peak VRAM/OOM), speed, a sample clip
