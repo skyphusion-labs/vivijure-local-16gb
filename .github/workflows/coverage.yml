@@ -1,7 +1,11 @@
 name: coverage
 
-# Free GitHub Actions check named `coverage` (org ruleset context).
-# Does NOT use actions/upload-code-coverage -- that is paid Code Quality.
+# `coverage` context the org ruleset requires. fc#2279: the old estate coverage.yml chose its command
+# with `npm run --silent | grep`, which prints nothing on npm 10, so it fell through to an echo and
+# passed without running tests. This repo has no root npm/go manifest, so the estate template does
+# not apply; this job runs the SAME command ci runs, directly, with no fallthrough branch. Every
+# green run prints one line `coverage-standard: EXECUTED <cmd>`; classify a run by that line.
+# Does NOT use actions/upload-code-coverage (paid Code Quality).
 
 on:
   pull_request:
@@ -18,42 +22,21 @@ concurrency:
 jobs:
   coverage:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Setup Node
-        if: hashFiles('package.json') != ''
-        uses: actions/setup-node@v7
+      - uses: actions/setup-python@v7
         with:
-          node-version: "22"
-          cache: npm
+          python-version: "3.12"
 
-      - name: JS/TS coverage
-        if: hashFiles('package.json') != ''
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
         run: |
           set -euo pipefail
-          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
-            npm ci
-          else
-            npm install --no-audit --no-fund
-          fi
-          if npm run --silent 2>/dev/null | grep -qE '^  coverage'; then
-            npm run coverage
-          elif npm run --silent 2>/dev/null | grep -qE '^  test'; then
-            npm test
-          else
-            echo "no test/coverage script; coverage check present"
-          fi
-
-      - name: Go coverage
-        if: hashFiles('go.mod') != ''
-        run: |
-          set -euo pipefail
-          go test ./... -cover
-
-      - name: Present
-        if: hashFiles('package.json') == '' && hashFiles('go.mod') == ''
-        run: echo "no supported test manifest; coverage check present"
+          echo "coverage-standard: EXECUTED pytest -q"
+          pytest -q
