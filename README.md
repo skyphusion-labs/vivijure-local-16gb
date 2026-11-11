@@ -309,7 +309,7 @@ makes the i2v endpoint refuse to serve). The backend holds no studio secrets and
 
 Homelab builders with a **16GB consumer GPU** who want higher-fidelity Vivijure image-to-video (CogVideoX-5B) locally without RunPod rent.
 
-**Vivijure Studio:** https://vivijure.com · **Live demo:** https://demo.vivijure.com · **Skyphusion Labs:** https://skyphusion.org
+**Vivijure Studio:** https://vivijure.dev · **Live demo:** https://demo.vivijure.com · **Skyphusion Labs:** https://skyphusion.org
 
 ## Support
 
