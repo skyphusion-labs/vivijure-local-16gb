@@ -27,6 +27,10 @@ same hook, and the USER picks the door:
    Wan 2.2 A14B MoE (H200 / B200)                     LTX-Video (speed)        CogVideoX-5B-I2V (fidelity)
 ```
 
+> The DATACENTER column is the earlier layout. The project's operated RunPod endpoint
+> (`vivijure-backend`) now makes SDXL keyframes, not Wan motion. Cloud motion comes from the
+> cloud motion doors, and `own-gpu` reaches a GPU server an operator runs.
+
 All backends speak the IDENTICAL `i2v_clip` job contract (`{ action, project, shot_id, prompt,
 keyframe_key?, config }`) and write the clip to the SAME shared R2 bucket, returning a pointer-only
 result. That sameness IS the swappability: the same control plane, the same per-shot `buildI2vBody`,
