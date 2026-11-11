@@ -145,3 +145,11 @@ admin (the lead or Conrad; crew cannot create release tags) tags that PR's MERGE
 `sha="$(gh pr view <release-pr> --json mergeCommit -q .mergeCommit.oid)"`, then
 `git tag -a vX.Y.Z -m "vX.Y.Z" "$sha" && git push origin vX.Y.Z`.
 `runtime-build.yml` refuses a commit that is not an ancestor of `origin/main`. `publish.yml` (the `v*` tag image push) does not repeat that check.
+
+## Release convention (bump-at-release)
+
+One convention for every skyphusion-labs repo (Conrad, ruled 2026-11-10, fleet-chezmoi#1766). A version moves ONLY in a release PR: bump the version, then assemble the changelog. Feature and fix PRs do not bump. Releases go through a PR (fleet-chezmoi#1622) and the tag goes on that PR's merge commit.
+
+- Version of record here: src/vivijure_local/__init__.py (__version__).
+- Tag shape: `v*`.
+- Check before a release PR: does a tag already exist for the version currently in the manifest? Yes means the cycle is closed, so the release PR bumps. No means a bump already landed outside a release PR; stop and read why before bumping again.
