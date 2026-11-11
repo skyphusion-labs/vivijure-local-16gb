@@ -138,5 +138,10 @@ Conventional Commits (`feat(scope):`, `fix(scope):`, `docs:`); body explains the
 ## Release / deploy
 
 **Tag-gated production deploy.** Merges to `main` run CI only; they do not ship production.
-Cut an annotated SemVer tag on `main` to release (`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`).
+A release is a PR, the same as every other change and every other repo; there is no direct push
+to `main`, release cuts included (Conrad, 2026-11-10, fleet-chezmoi#1622). The release PR bumps
+the version and adds the `CHANGELOG.md` section and merges through the normal gate. Then an org
+admin (the lead or Conrad; crew cannot create release tags) tags that PR's MERGE COMMIT:
+`sha="$(gh pr view <release-pr> --json mergeCommit -q .mergeCommit.oid)"`, then
+`git tag -a vX.Y.Z -m "vX.Y.Z" "$sha" && git push origin vX.Y.Z`.
 `runtime-build.yml` refuses a commit that is not an ancestor of `origin/main`. `publish.yml` (the `v*` tag image push) does not repeat that check.
