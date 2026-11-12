@@ -7,7 +7,7 @@ The hard fact Conrad asked for: on a card with real headroom, how much does `VIV
 **Image:** `ghcr.io/skyphusion-labs/vivijure-local-16gb:0.3.1` (the shipped runtime; the
 `VIVIJURE_OFFLOAD` knob is live in it). Engine `CogVideoXImageToVideoPipeline` + `THUDM/CogVideoX-5b-I2V`,
 VAE tiling + slicing, bf16. Synthetic gradient keyframe, one motion prompt.
-**Cards (both SECURE cloud, prod account):**
+**Cards (both SECURE cloud, an operator RunPod account):**
 - **NVIDIA A40, 46068 MiB (~45.0 GiB)** -- the 48GB-class headroom card. $0.44/hr, CA-MTL-1.
 - **NVIDIA GeForce RTX 4090, 24564 MiB (23.52 GiB usable after the CUDA context)** -- the 24GB
   fits-or-not card. ~$0.69/hr.
@@ -99,10 +99,10 @@ card in `model` mode is the better price/performance, and it is what the shipped
 ## Reproducibility (the pod recipe)
 
 - **Provider:** RunPod **SECURE** cloud only (community caps pod disk ~20GB; the baked runtime + weights
-  will not fit), prod account (`t9wcvlxh8rc5la`).
+  will not fit), an operator RunPod account (secure cloud).
 - **Image:** the shipped `ghcr.io/skyphusion-labs/vivijure-local-16gb:0.3.1` (public on GHCR, no
   registry auth). The render image ships **no sshd**, so the pod was created via the RunPod REST v1 API
-  (`POST /v1/pods`) with a `dockerEntrypoint` override that installs + starts `openssh-server`, injects
+  (`POST /v1/pods`; RunPod REST v1 retires 2026-11-15, so a re-run uses REST v2) with a `dockerEntrypoint` override that installs + starts `openssh-server`, injects
   `PUBLIC_KEY`, and holds the container (`sleep infinity`) -- this leaves the door server UNstarted, so
   the GPU is clean for the benchmark. The `VIVIJURE_OFFLOAD` code path is byte-identical to shipped.
 - **Container disk:** 80GB on the A40 host; **40GB** on the 4090 host (24GB-class hosts expose less

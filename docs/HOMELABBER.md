@@ -222,19 +222,19 @@ Everything below is opt-in. You already have the thing working; this is room to 
 
 ### What you just did, and the honest trade-off
 
-You ran a **local door** -- rendering on hardware you own. The studio also has a **datacenter door**
-(rented top-end GPUs by the second) and a faster local door (LTX). The trade is real and we're upfront:
+You ran a **local door** -- rendering on hardware you own. The studio also has a **cloud motion door**
+(a rented model, paid per clip) and a faster local door (LTX). The trade is real and we're upfront:
 
-| | This door (CogVideoX, local) | LTX door (local) | Datacenter door |
+| | This door (CogVideoX, local) | LTX door (local) | Cloud motion door |
 |---|---|---|---|
-| Cost | **Free after hardware** (your power) | **Free after hardware** | Pay per render second |
-| Strength | **Fidelity** (best local i2v quality) | **Speed** (few-step, fast) | Max fidelity + length |
-| Speed | slower (measured ~1.6-5 min/clip) | fast (sub-minute draft; ~2-3 min top tiers) | fastest (datacenter cards) |
-| Ceiling | 720x480, ~6s clips (CogVideoX-5B-I2V) | ~768x512, ~5s (LTX-Video) | higher res / longer (Wan 2.2) |
-| Setup | one command on your box | one command | nothing (it's hosted) |
+| Cost | **Free after hardware** (your power) | **Free after hardware** | Pay per clip |
+| Strength | **Fidelity** (best local i2v quality) | **Speed** (few-step, fast) | Choice of models |
+| Speed | slower (measured ~1.6-5 min/clip) | fast (sub-minute draft; ~2-3 min top tiers) | depends on the model |
+| Ceiling | 720x480, ~6s clips (CogVideoX-5B-I2V) | ~768x512, ~5s (LTX-Video) | depends on the model |
+| Setup | one command on your box | one command | an API key in the studio |
 
 Pick CogVideoX when you value how the clip looks over how fast it renders; pick LTX when you want quick
-iteration; pick the datacenter door for maximum fidelity without owning hardware.
+iteration; pick a cloud motion door for a model your card cannot run.
 
 ### Quality tiers (what your card honestly delivers)
 

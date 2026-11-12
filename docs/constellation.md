@@ -27,20 +27,18 @@ flowchart TD
 
     subgraph modules[Modules: one job each, opt-in]
         cloudmods[Cloud video modules<br/>Seedance, Kling, Veo, Wan, ...]
-        finishmods[Finish modules<br/>upscale, smooth, lip-sync, titles]
+        finishmods[Finish modules<br/>upscale, smooth, titles]
         audiomods[Audio modules<br/>music, narration]
     end
 
     subgraph gpu[The GPU render engines]
-        backend[vivijure-backend<br/>RunPod cloud GPU:<br/>keyframes, image-to-video, LoRA training]
+        backend[vivijure-backend<br/>RunPod cloud GPU:<br/>SDXL keyframes]
         local12[vivijure-local-12gb<br/>your own 12GB card LTX]
         local16[vivijure-local-16gb<br/>your own 16GB card CogVideoX]
     end
 
     subgraph finish[Finish helper engines]
-        musetalk[vivijure-musetalk<br/>lip-sync]
         upscale[vivijure-upscale<br/>video upscale]
-        audioup[vivijure-audio-upscale<br/>audio cleanup]
     end
 
     discord --> slate
@@ -49,10 +47,7 @@ flowchart TD
     studio --> cloudmods
     studio --> finishmods
     studio --> audiomods
-    cloudmods --> backend
-    finishmods --> musetalk
     finishmods --> upscale
-    audiomods --> audioup
     studio --> backend
     studio --> local12
     studio --> local16
