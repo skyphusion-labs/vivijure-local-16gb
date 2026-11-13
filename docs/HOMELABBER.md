@@ -286,7 +286,7 @@ VIVIJURE_MAX_VRAM_GB=16
 Leave it blank to use the whole card (the default). A value at or above your card's real size is the
 same as leaving it blank. Note the cap is a ceiling, not a discount: if you set it below what a tier
 actually needs, that tier will OOM -- drop to a lower tier (`final` -> `standard` -> `draft`), switch to
-sequential offload, or raise the cap. The startup log prints the applied cap and the free memory it saw, and it warns when free memory is below the cap.
+sequential offload, or raise the cap. The cap bounds vivijure only; it cannot stop another program taking memory after vivijure starts. At startup the backend reads the free memory, and if the cap is more than what is free it warns and clamps the cap to the free amount (less 0.5GB); if the card is essentially full it warns that the cap was not clamped and the render will likely OOM. Start vivijure before your other GPU workloads, or size them to the remainder. The startup log prints the applied cap, your requested cap, the total and the free memory.
 
 `LOG_JOBS=1` prints one stdout line per job event (submit, completed, failed, canceled). The gate is exactly `1`. `true`, `yes`, and `on` stay silent. The line never includes the job payload.
 

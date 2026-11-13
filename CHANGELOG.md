@@ -5,6 +5,10 @@ onward (production-ready baseline).
 
 ## Unreleased
 
+- **fix:** `VIVIJURE_MAX_VRAM_GB` is clamped to FREE memory at boot (less 0.5GB headroom) with a WARNING naming
+  requested, free and total GB, and a distinct warning when the card is essentially full; the startup line
+  names the right denominators; docs say the cap bounds this process only (vivijure-local-12gb#138).
+
 ## v1.1.0 -- 2026-08-07
 
 MINOR. SDXL cast train_lora on the local door (own silicon).

@@ -75,7 +75,10 @@ Copy `.env.example` to `.env` and fill these in. Only the R2 keys are required.
 ### `VIVIJURE_MAX_VRAM_GB`
 - **What it is:** a cap, in gigabytes, on how much graphics memory (VRAM) this backend is allowed to use.
   Applied via `torch.cuda.set_per_process_memory_fraction` in the render worker **before** any model
-  loads, so it is a hard ceiling (not just a reporting number).
+  loads, so it is a hard ceiling for THIS process (not just a reporting number). It cannot stop another
+  program taking memory later. At boot the backend reads the card's FREE memory; if the cap is more than
+  what is free, it clamps the cap to the free amount (less 0.5GB) and logs a WARNING naming requested, free
+  and total GB. That check sees only memory taken BEFORE the backend started.
 - **Why:** CogVideoX-5B-I2V with model CPU offload fits a 16GB card, but PyTorch's allocator can
   **reserve** more than the live tensor footprint when free VRAM exists on a bigger card. The shipped
   default caps that so homelabbers on real 16GB silicon do not OOM silently.
