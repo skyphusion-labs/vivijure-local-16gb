@@ -324,8 +324,9 @@ def apply_vram_cap(logger=None, device=None) -> float | None:
     is allowed to claim. When the env is set AND CUDA is present, translate the GB cap into torch's
     per-process memory fraction on the active device and pin it, so an over-eager pipeline can never grab
     the whole card. The fraction is of the card total. Free memory is read at the same time. When free
-    memory is below the cap, startup warns and still applies the fraction: the cap does not shrink to
-    the free remainder. Unset / blank / non-numeric / CPU-only => no-op (the full card, the honest default).
+    memory is below the cap, startup warns and clamps the cap to the free amount less a small headroom
+    (never above the requested cap). This sees only memory taken BEFORE boot; it cannot stop another
+    process taking memory later (see core/vram.py). Unset / blank / non-numeric / CPU-only => no-op (the full card, the honest default).
 
     Returns the applied fraction, or None when it was a no-op, so the caller (and the proof) can assert
     on it. The parse + fraction math is the PURE vram.* helpers (CPU-tested); only the enforcement here
@@ -354,19 +355,32 @@ def apply_vram_cap(logger=None, device=None) -> float | None:
         total_bytes = device.get_device_properties(device_index).total_memory
         log(f"WARNING: free VRAM could not be read ({e}). The cap uses total memory only.")
     total_gb = total_bytes / (1024 ** 3)
+    requested_gb = gb
+    if free_gb is not None:
+        gb = vram.clamp_cap_to_free(gb, free_gb)
     fraction = vram.vram_fraction(gb, total_gb)
     if fraction is None:
         return None
     device.set_per_process_memory_fraction(fraction, device_index)
     if free_gb is None:
-        log(f"VRAM capped to {gb}GB ({fraction:.3f} of {total_gb:.1f}GB total, free unread)")
+        log(f"VRAM capped to {gb:.1f}GB ({fraction:.3f} of {total_gb:.1f}GB total; free memory unread)")
     else:
-        log(f"VRAM capped to {gb}GB ({fraction:.3f} of {total_gb:.1f}GB total, {free_gb:.1f}GB free)")
-        if vram.vram_free_shortfall(gb, free_gb):
+        if gb < requested_gb:
             log(
-                f"WARNING: VIVIJURE_MAX_VRAM_GB is {gb}GB but only {free_gb:.1f}GB is free. "
-                "This cap is a fraction of total memory and does not shrink to the free remainder."
+                f"WARNING: VIVIJURE_MAX_VRAM_GB requests {requested_gb:.1f}GB but only {free_gb:.1f}GB of "
+                f"{total_gb:.1f}GB is free at boot (another process holds the rest). Clamping the cap to "
+                f"{gb:.1f}GB."
             )
+        elif free_gb < requested_gb:
+            log(
+                f"WARNING: VIVIJURE_MAX_VRAM_GB requests {requested_gb:.1f}GB but only {free_gb:.1f}GB of "
+                f"{total_gb:.1f}GB is free at boot, below the {vram.FREE_HEADROOM_GB}GB headroom. Cap NOT "
+                f"clamped; the card is essentially full and this process will likely OOM."
+            )
+        log(
+            f"VRAM capped to {gb:.1f}GB ({fraction:.3f} of {total_gb:.1f}GB total; "
+            f"requested {requested_gb:.1f}GB, {free_gb:.1f}GB free at boot)"
+        )
     return fraction
 
 

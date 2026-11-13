@@ -48,3 +48,24 @@ def test_vram_free_shortfall_is_true_only_when_free_is_below_the_cap():
     assert vram.vram_free_shortfall(11.5, 18.0) is False
     assert vram.vram_free_shortfall(None, 8.0) is False
     assert vram.vram_free_shortfall(11.5, 0.0) is False
+
+
+def test_clamp_cap_to_free_leaves_a_cap_the_free_memory_can_hold():
+    assert vram.clamp_cap_to_free(11.5, 18.0) == 11.5
+    assert vram.clamp_cap_to_free(11.5, 11.5) == 11.5
+
+
+def test_clamp_cap_to_free_shrinks_to_free_less_headroom():
+    assert vram.clamp_cap_to_free(11.5, 8.0) == 8.0 - vram.FREE_HEADROOM_GB
+    assert vram.clamp_cap_to_free(11.5, 8.0, headroom_gb=1.0) == 7.0
+
+
+def test_clamp_cap_to_free_never_exceeds_the_request():
+    assert vram.clamp_cap_to_free(4.0, 100.0) == 4.0
+    assert vram.clamp_cap_to_free(11.5, 11.7) == 11.5
+
+
+def test_clamp_cap_to_free_none_and_unusable_reads_fall_back():
+    assert vram.clamp_cap_to_free(None, 8.0) is None
+    assert vram.clamp_cap_to_free(11.5, 0.0) == 11.5      # bad read: today's behaviour
+    assert vram.clamp_cap_to_free(11.5, 0.3) == 11.5      # free below headroom: no zero/negative cap
