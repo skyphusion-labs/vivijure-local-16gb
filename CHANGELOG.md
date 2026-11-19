@@ -5,6 +5,7 @@ onward (production-ready baseline).
 
 ## Unreleased
 
+- **deps:** sentencepiece 0.2.3, imageio-ffmpeg 0.8.1, boto3 1.44.3, and peft 0.21.3. imageio stays at 2.38.0. Version 2.38.1 needs Python 3.11. This image is Ubuntu 22.04.
 - **fix:** `VIVIJURE_MAX_VRAM_GB` is clamped to FREE memory at boot (less 0.5GB headroom) with a WARNING naming
   requested, free and total GB, and a distinct warning when the card is essentially full; the startup line
   names the right denominators; docs say the cap bounds this process only (vivijure-local-12gb#138).

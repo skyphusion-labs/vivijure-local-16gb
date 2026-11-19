@@ -27,6 +27,8 @@ updates:
       - dependency-name: "torch"
       - dependency-name: "torchvision"
       - dependency-name: "av"
+      # imageio >=2.38.1 needs Python >=3.11. This image is Ubuntu 22.04.
+      - dependency-name: "imageio"
     groups:
       pip-minor-patch:
         patterns: ["*"]
